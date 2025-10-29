@@ -50,8 +50,8 @@
     </ForestDetails>
     <Growth>
       <TYFParameters count="2" idSP="8">
-        <TYFCategory tTYFCat="Block" tyf_G="5.554" tyf_r="2.4285984527898" />
-        <TYFCategory tTYFCat="Belt" tyf_G="5.554" tyf_r="5.2439287857572" />
+        <TYFCategory tTYFCat="Block" tyf_G="5.554" tyf_r="0.3968657779586" />
+        <TYFCategory tTYFCat="Belt" tyf_G="5.554" tyf_r="0.4942612607755" />
       </TYFParameters>
       <TimeSeries tInTS="stemDensity" tExtrapTS="NearestYr" tOriginTS="Sprout" yr0TS="0" nYrsTS="1" dataPerYrTS="1" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
         <WinState L="10" T="120" clientW="702" clientH="450" ws="Normal" />
