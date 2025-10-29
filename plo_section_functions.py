@@ -19,7 +19,7 @@ def _bool_to_xml(value: bool) -> str:
 # ============================================================================
 
 def create_meta_section(
-    nmME: str,
+    nmME: str = 'New_Plot',
     savedByResearch: bool = True,
     savedByVersion: str = "",
     lockTime: str = "",
@@ -114,86 +114,172 @@ def create_config_section(
     ----------
     tPlot : str, optional
         Plot type determining analysis type (default: "CompF").
-        - "CompF" = Forest system (comprehensive forest)
-        - "SoilF" = Forest soil analysis only
-        - "CompA" = Agricultural system
-        - "SoilA" = Agricultural soil analysis only
-        - "CompM" = Mixed (forest and agricultural) system
+
+        - "CompF" : Comprehensive Forest System
+            Complete multilayer forest simulation with trees, debris, mulch, soil, and products.
+            Models: CAMFor (trees), GENDEC (debris), RothC (soil).
+            Use for: Full carbon accounting in forestry projects with above/belowground biomass.
+
+        - "SoilF" : Forest Soil Only
+            Forest soil analysis without tree/debris layers. RothC runs in standalone mode.
+            Use for: Soil carbon dynamics in forested systems without modeling tree growth.
+
+        - "CompA" : Comprehensive Agricultural System
+            Complete multilayer agricultural simulation with crops, debris, mulch, soil, and products.
+            Models: CAMAg (crops), GENDEC (debris), RothC (soil).
+            Use for: Agricultural carbon accounting including crop residues and soil.
+
+        - "SoilA" : Agricultural Soil Only
+            Agricultural soil analysis without crop/debris layers. RothC runs in standalone mode.
+            Use for: Soil carbon under agricultural management without modeling crops.
+
+        - "CompM" : Mixed/Multilayer System
+            Combined forest and agricultural systems with variable mixing over time.
+            Use for: Woodland grazing, deforestation/reforestation transitions, agroforestry.
+            Note: Forest percentage can vary; systems share climate but have separate irrigation.
 
     rothCVers : str, optional
-        Carbon calculation version (default: "Vers263").
-        "Vers263" = Version 2.6.3 (current standard)
+        RothC soil carbon model version (default: "Vers263").
+
+        - "Vers263" : RothC Version 2.6.3 (current standard for Australian National Inventory)
+            Features: 5-pool model (DPM, RPM, BIO, HUM, IOM), monthly/finer timesteps,
+            temperature and moisture modifiers, clay content effects.
 
     tTreeProd : str, optional
-        Tree productivity model (default: "TYF").
-        "TYF" = Timber Yield Formula (standard for forests)
+        Tree productivity/growth model (default: "TYF").
+
+        - "TYF" : Tree Yield Formula (standard empirical model)
+            Sigmoidal biomass accumulation curve adjusted annually by Forest Productivity Index.
+            Formula: ΔY = f(M, k, Age, FPIt/FPIave) where M=max biomass, k=shape parameter.
+            Use for: Plantation and native forest growth modeling.
 
     userCalcFPI : bool, optional
-        Enable custom Forest Productivity Index (default: False).
+        Enable custom Forest Productivity Index calculation (default: False).
+        When True: User provides FPI time series or calculates using 3PG-lite.
+        When False: Use downloaded FPI data from Data Builder.
+        Use for: Site-specific FPI calibration or when downloaded data inadequate.
 
     userCalcModASW : bool, optional
         Enable custom available soil water modifier (default: False).
+        When True: User overrides RothC default soil water modifier affecting decomposition.
+        When False: Use standard RothC soil water calculations.
+        Use for: Advanced users with detailed soil moisture data or site-specific calibrations.
 
     userCalcModFrost : bool, optional
-        Enable custom frost modifier (default: False).
+        Enable custom frost modifier time series (default: False).
+        When True: User provides frost modifier time series affecting growth.
+        When False: No frost effects or use defaults.
+        Use for: High-elevation or frost-prone sites where frost significantly limits growth.
 
     userCalcModTemp : bool, optional
-        Enable custom temperature modifier (default: False).
+        Enable custom temperature modifier for tree growth (default: False).
+        When True: User provides temperature modifier time series.
+        When False: Use standard temperature response curves.
+        Use for: Species with non-standard temperature responses requiring custom calibration.
 
     userCropGrade : bool, optional
-        Enable crop grading (default: False).
+        Enable crop quality grading/classification (default: False).
+        When True: Detailed crop product quality tracking enabled.
+        When False: All crop output treated uniformly.
+        Use for: Agricultural systems with quality-dependent pricing or management.
 
     userDispEner : bool, optional
-        Enable energy disposition (default: False).
+        Enable energy disposition tracking (default: False).
+        When True: Tracks energy content of biomass and products.
+        When False: No energy tracking (carbon only).
+        Use for: Bioenergy projects or full lifecycle energy analysis.
 
     userDispProd : bool, optional
-        Enable productivity disposition (default: False).
+        Enable detailed productivity output displays (default: False).
+        When True: Additional growth and productivity outputs generated.
+        When False: Standard outputs only.
+        Use for: Detailed growth analysis, research, or model calibration.
 
     userEcon : bool, optional
-        Enable economic analysis (default: False).
+        Enable economic analysis module (default: False).
+        When True: Calculates net present value, costs, revenues for project.
+        When False: No economic calculations (carbon accounting only).
+        Use for: Financial feasibility analysis for forestry or agricultural projects.
 
     userEventIrrA : bool, optional
-        Enable agricultural irrigation events (default: False).
+        Use event-based irrigation for agricultural system (default: False).
+        When True: Irrigation specified as discrete events (date, amount).
+        When False: Use time series for irrigation.
+        Use for: Irregular irrigation schedules or precisely scheduled applications.
 
     userEventIrrF : bool, optional
-        Enable forest irrigation events (default: False).
+        Use event-based irrigation for forest system (default: False).
+        When True: Forest irrigation specified as events.
+        When False: Use time series for irrigation.
+        Use for: Supplemental irrigation at specific dates/growth stages.
 
     userEventManA : bool, optional
-        Enable agricultural management events (default: False).
+        Use event-based management for agricultural system (default: False).
+        When True: Tillage, harvest, grazing as discrete events.
+        When False: Continuous/time-series management.
+        Use for: Most agricultural systems with specific management dates.
 
     userEventManF : bool, optional
-        Enable forest management events (default: False).
+        Use event-based management for forest system (default: False).
+        When True: Thinning, harvest, fire as discrete events.
+        When False: Continuous management or no events.
+        Use for: Managed forests with scheduled operations (thinning, harvesting).
 
     userEventNFeA : bool, optional
-        Enable agricultural fertilization events (default: True).
-        True = Include nitrogen fertilizer for crops
+        Enable nitrogen fertilizer events for agricultural system (default: True).
+        When True: Nitrogen fertilizer applications tracked and affect growth/soil.
+        When False: No nitrogen fertilizer effects modeled.
+        Use for: Most agricultural systems use fertilizer; set False only for organic/unfertilized systems.
 
     userEventNFeF : bool, optional
-        Enable forest fertilization events (default: True).
-        True = Include nitrogen fertilizer applications
+        Enable nitrogen fertilizer events for forest system (default: True).
+        When True: Nitrogen fertilizer applications tracked and affect forest growth.
+        When False: No nitrogen fertilizer effects modeled.
+        Use for: Plantation forests with fertilization programs; set False for natural forests.
 
     userLogGrade : bool, optional
-        Enable log grading (default: False).
+        Enable log quality grading for forest products (default: False).
+        When True: Logs graded by size, quality for detailed product tracking.
+        When False: Uniform log quality.
+        Use for: Commercial forestry with quality-dependent pricing and markets.
 
     userMulchA : bool, optional
-        Enable agricultural mulch customization (default: False).
+        Enable custom mulch layer for agricultural system (default: False).
+        When True: Separate mulch layer modeled (e.g., stubble retention).
+        When False: No explicit mulch layer.
+        Use for: Conservation agriculture with residue retention or surface mulching.
 
     userMulchF : bool, optional
-        Enable forest mulch customization (default: False).
+        Enable custom mulch layer for forest system (default: False).
+        When True: Separate forest floor mulch layer modeled.
+        When False: No explicit mulch layer.
+        Use for: Forests with thick litter layers or explicit litter management.
 
     userN : bool, optional
-        Enable nitrogen cycle calculations (default: False).
+        Enable full nitrogen cycle calculations (default: False).
+        When True: Tracks nitrogen in all pools and fluxes; enables N₂O emissions.
+        When False: Carbon-only mode (faster computation).
+        Use for: Detailed nutrient cycling analysis, N₂O accounting, or nitrogen budget studies.
+        Note: Significantly increases computational complexity and runtime.
 
     userOpti : bool, optional
-        Enable optimization mode (default: False).
+        Enable optimization mode for parameter fitting (default: False).
+        When True: FullCAM performs automated parameter optimization.
+        When False: Standard simulation mode.
+        Use for: Calibration of model parameters to match observed data.
 
     userSens : bool, optional
         Enable sensitivity analysis mode (default: False).
+        When True: Runs multiple simulations varying parameters systematically.
+        When False: Single simulation run.
+        Use for: Uncertainty analysis and parameter importance assessment.
 
     userSoilMnrl : bool, optional
-        Enable user-defined soil mineral parameters (default: True).
-        - True = Allow manual soil input
-        - False = Use default soil properties
+        Enable user-defined soil mineral (nitrogen) parameters (default: True).
+        When True: Allow manual soil nitrogen inputs and fertilizer specifications.
+        When False: Use only default soil mineral nitrogen values.
+        Use for: Most simulations need this True to specify fertilizer applications and N inputs.
+        Note: Required True if userEventNFeA or userEventNFeF is True.
 
     Returns
     -------
@@ -216,7 +302,7 @@ def create_config_section(
 def create_timing_section(
     stYrYTZ: str = "2010",
     enYrYTZ: str = "2100",
-    stepsPerYrYTZ: str = "110",
+    stepsPerYrYTZ: str = "1",
     dailyTimingTZ: bool = False,
     useDaysPerStepDTZ: bool = True,
     daysPerStepDTZ: str = "1",
@@ -240,53 +326,99 @@ def create_timing_section(
     ----------
     stYrYTZ : str, optional
         Starting year for simulation (default: "2010").
+        Must be 4-digit year string. Simulation begins January 1 (or first timestep) of this year.
+        Note: Climate time series should cover at least this year (or use extrapolation).
 
     enYrYTZ : str, optional
         Ending year for simulation (default: "2100").
+        Must be 4-digit year string. Simulation ends December 31 (or last timestep) of this year.
+        Typical range: 30-90 years for forestry (one rotation to maturity), 10-30 years for agriculture.
 
     stepsPerYrYTZ : str, optional
-        Steps per year for yearly calculation (default: "110").
+        Number of simulation timesteps per year (default: "110").
+        Valid values: 1 to 8760 (annual to hourly).
+        Common values:
+        - "1" = Annual timesteps (fastest; long-term forest projections)
+        - "12" = Monthly timesteps (most common for carbon accounting; adequate for most purposes)
+        - "52" = Weekly timesteps (detailed crop growth)
+        - "365" = Daily timesteps (detailed soil moisture/crop modeling)
+        - "8760" = Hourly timesteps (research/detailed process studies)
+        Note: Shorter timesteps increase computation time proportionally. Time series data
+        automatically interpolated to match simulation timesteps.
 
     dailyTimingTZ : bool, optional
-        Use daily time stepping (default: False).
+        Enable daily timing precision for events (default: False).
+        When True: Management events can be specified to exact calendar day within year.
+        When False: Events occur at timestep boundaries (e.g., beginning of month for monthly steps).
+        Use for: Set True when precise timing of operations critical (e.g., irrigation scheduling).
 
     useDaysPerStepDTZ : bool, optional
-        Define days per simulation step (default: True).
+        Define timesteps by days per step rather than steps per day (default: True).
+        When True: Use daysPerStepDTZ parameter.
+        When False: Use stepsPerDayDTZ parameter.
+        Note: Only relevant when dailyTimingTZ is True.
 
     daysPerStepDTZ : str, optional
-        Number of days per step (default: "1").
+        Number of days per simulation timestep for daily timing mode (default: "1").
+        Valid when useDaysPerStepDTZ=True and dailyTimingTZ=True.
+        Example: "1" = daily timesteps, "7" = weekly timesteps.
 
     stepsPerDayDTZ : str, optional
-        Number of steps per day (default: "1").
+        Number of simulation timesteps per day for daily timing mode (default: "1").
+        Valid when useDaysPerStepDTZ=False and dailyTimingTZ=True.
+        Example: "1" = daily, "24" = hourly, "48" = half-hourly.
 
     outputFreqDTZ : str, optional
-        Output frequency (default: "Daily").
-        - "Daily" = Output daily results
-        - "Monthly" = Output monthly aggregates
-        - "Yearly" = Output yearly results
+        Output frequency descriptor for daily timing mode (default: "Daily").
+        Values: "Daily", "Monthly", "Yearly", or custom.
+        Note: Descriptive only; actual output frequency controlled by stepsPerOutDTZ.
+        Only relevant when dailyTimingTZ=True.
 
     stepsPerOutDTZ : str, optional
-        Steps between outputs (default: "1").
+        Number of timesteps between outputs in daily timing mode (default: "1").
+        Valid values: 1 to stepsPerYrYTZ.
+        Use for: Reduce output file size by outputting less frequently than simulation runs.
+        Example: With daily timesteps (365), set to "30" for ~monthly output.
+        Only relevant when dailyTimingTZ=True.
 
     firstOutStepDTZ : str, optional
-        First step to output (default: "1").
+        First timestep to include in output for daily timing mode (default: "1").
+        Use for: Skip initial spin-up period in outputs.
+        Only relevant when dailyTimingTZ=True.
 
     tStepsYTZ : str, optional
-        Time steps per year (default: "Yearly").
-        - "Yearly" = Single annual timestep
-        - "Monthly" = 12 monthly timesteps
+        Time step structure within year (default: "Yearly").
+        Values:
+        - "Yearly" = Single annual timestep (use with stepsPerYrYTZ="1")
+        - "Monthly" = 12 monthly timesteps (use with stepsPerYrYTZ="12")
+        - "Weekly" = 52 weekly timesteps (use with stepsPerYrYTZ="52")
+        Note: Should match stepsPerYrYTZ value for consistency.
 
     stStepInStYrYTZ : str, optional
-        Starting step in year (default: "").
+        Starting timestep number within starting year (default: "").
+        Empty string ("") = Start from first timestep of year.
+        Use for: Start simulation mid-year (e.g., "7" for July with monthly steps).
+        Rarely used; most simulations start January 1.
 
     enStepInEnYrYTZ : str, optional
-        Ending step in final year (default: "").
+        Ending timestep number within ending year (default: "").
+        Empty string ("") = End at last timestep of year.
+        Use for: End simulation mid-year (e.g., "6" for June with monthly steps).
+        Rarely used; most simulations end December 31.
 
     stepsPerOutYTZ : str, optional
-        Yearly output interval (default: "1").
+        Number of yearly timesteps between outputs (default: "1").
+        Valid values: 1 to stepsPerYrYTZ.
+        "1" = Output every timestep (most common).
+        "12" = With monthly timesteps, outputs annually.
+        Use for: Reduce output file size for long simulations.
+        Example: 90-year simulation with monthly steps produces 1,080 output rows; set to "12" for 90 rows.
 
     firstOutStepYTZ : str, optional
-        First year to output (default: "1").
+        First timestep to include in yearly output (default: "1").
+        "1" = Include first timestep (most common).
+        Use for: Skip initial equilibration period in outputs.
+        Example: "121" skips first 10 years with monthly timesteps (10 × 12 = 120).
 
     Returns
     -------
@@ -312,7 +444,7 @@ def create_timing_section(
 def create_build_section(
     lonBL: float,
     latBL: float,
-    frCat: str = "null",
+    frCat: str = "All",
     applyDownloadedData: bool = True,
     areaBL: str = "OneKm",
     frFracBL: str = ""
@@ -334,31 +466,85 @@ def create_build_section(
         Negative = Southern hemisphere
 
     frCat : str, optional
-        Forest category (default: "null").
-        - "null" = All categories
-        - "Plantation" = Commercial plantation
-        - "EnvMallee" = Environmental plantings
-        - "ERF" = Emissions Reduction Fund method
-        - "ERFH" = ERF with EMP-specific calibrations
-        - "MVG" = Major Vegetation Groups
+        Forest category controlling species availability and calibrations (default: "All").
+
+        - "All" or "null" : All Categories
+            No filtering; all species and data types available.
+            Use for: When forest category not relevant or combining multiple types.
+
+        - "Plantation" : Commercial Plantation Species
+            Commercial forestry species filtered by National Plantation Inventory (NPI) region.
+            Examples: Eucalyptus globulus, Pinus radiata.
+            Use for: Commercial timber plantations managed for harvest.
+
+        - "MVG" : Major Vegetation Groups
+            Native vegetation classified by structure/species (17 NVIS classes).
+            Examples: Rainforest, Eucalyptus Tall Open Forests, Eucalyptus Open Forest.
+            Use for: Native forest and woodland simulations.
+            Note: Species identified by MVG number during spatial simulations.
+
+        - "EnvMallee" : Environmental Plantings (including Mallee)
+            Environmental restoration plantings and mallee species for ecological purposes.
+            Use for: Ecological restoration, carbon plantings, mallee belt plantings for salinity control.
+            Note: Species availability filtered by Growth Region.
+
+        - "ERF" : Emissions Reduction Fund Methods
+            Species and calibrations eligible for ERF (ACCU) carbon crediting.
+            Methods: Reforestation, Environmental Plantings, Native Forest Management.
+            Use for: Projects seeking Australian Carbon Credit Units under ERF.
+            Note: Uses calibrated parameters meeting ERF methodology requirements.
+
+        - "ERFH" : ERF with HIR/EMP Calibrations
+            ERF methods with Human-Induced Regeneration (HIR) or Enhanced Measurement
+            Procedure (EMP) site-specific calibrations.
+            Use for: ERF projects using site-specific parameter sets.
+            Note: More detailed calibrations than standard ERF.
 
     applyDownloadedData : bool, optional
-        Use downloaded spatial data (default: True).
-        - True = Apply API-downloaded data
-        - False = Use manual/default values
+        Whether to apply spatial data downloaded from Data Builder API (default: True).
+        When True: Use API-downloaded climate, soil, and species data for this location.
+        When False: Use manual values or defaults; ignore downloaded data.
+        Use for: Set False when using entirely custom/manual data inputs.
 
     areaBL : str, optional
-        Spatial averaging area (default: "OneKm").
-        - "Cell" = Single grid cell (no averaging)
-        - "Hectare" = 1 hectare
-        - "OneKm" = 1 km² (100 hectare)
-        - "TwoKm" = 4 km² (400 hectare)
-        - "ThreeKm" = 9 km² (900 hectare)
-        - "FiveKm" = 25 km² (2500 hectare)
+        Spatial averaging area for climate and soil data (default: "OneKm").
+
+        - "Cell" : Single Grid Cell
+            Single cell from spatial data (~100m × 100m, ~1 ha depending on resolution).
+            Use for: Precise location data; minimal spatial averaging.
+            Note: Uses data from exact coordinates; sensitive to local anomalies.
+
+        - "Hectare" : One Hectare
+            1 hectare (10,000 m², 0.01 km²) centered on coordinates.
+            Use for: Small plots or trial sites.
+
+        - "OneKm" : One Square Kilometer (DEFAULT, RECOMMENDED)
+            100 hectares (1 km²) centered on plot coordinates.
+            Use for: Most applications; good balance between representativeness and site-specificity.
+            Note: Recommended default for standard carbon accounting projects.
+
+        - "TwoKm" : Two Square Kilometers
+            2 km² area for broader spatial averaging.
+            Use for: When larger spatial averaging desired to reduce local variability.
+
+        - "ThreeKm" : Three Square Kilometers
+            3 km² area for regional-scale averaging.
+
+        - "FiveKm" : Five Square Kilometers
+            5 km² area for regional-scale analysis.
+            Use for: Regional analysis where fine spatial detail not required.
+            Note: Smooths out local variability; more representative of regional conditions.
+
+        **Purpose:** Climate data (rainfall, temperature) and soil carbon initial conditions
+        are averaged over this area. Larger areas are more representative of regional
+        conditions but less site-specific.
 
     frFracBL : str, optional
-        Forest fraction (default: "").
-        "" = Calculated from data
+        Forest fraction of the plot area (default: "").
+        Empty string ("") = Automatically calculated from spatial data.
+        Value range: "0.0" to "1.0" (0% to 100% forest cover).
+        Use for: Mixed systems (CompM) where forest/agricultural proportions need specification.
+        Note: Rarely needs manual specification; use default for most cases.
 
     Returns
     -------
@@ -439,37 +625,77 @@ def create_site_section(
         Conditional irrigation for agriculture (default: False).
 
     siteMultStemF : str, optional
-        Multiplier for stem carbon fraction (default: "1.0").
+        Site multiplier for forest stem (wood) biomass allocation (default: "1.0").
+        Adjusts default allometric relationship for stem/trunk component.
+        Valid range: >0, typically 0.5 to 2.0.
+        Use for: Sites with unusually high/low stem allocation vs species average.
+        Effect: Values >1 increase stem allocation; <1 decrease it.
+        Note: Default 1.0 uses species-specific allometric equations.
 
     siteMultBranF : str, optional
-        Multiplier for branch carbon (default: "1.0").
+        Site multiplier for forest branch biomass allocation (default: "1.0").
+        Adjusts branch component allocation relative to species default.
+        Valid range: >0, typically 0.5 to 2.0.
+        Use for: Adjust for site-specific growth form (e.g., wind-pruned sites have less branches).
+        Note: Branch allocation varies with stand density and management.
 
     siteMultBarkF : str, optional
-        Multiplier for bark carbon (default: "1.0").
+        Site multiplier for forest bark biomass allocation (default: "1.0").
+        Adjusts bark thickness/mass relative to species default.
+        Valid range: >0, typically 0.8 to 1.2.
+        Note: Bark typically smaller component; less variable than stems/branches.
 
     siteMultLeafF : str, optional
-        Multiplier for leaf carbon (default: "1.0").
+        Site multiplier for forest leaf/foliage biomass allocation (default: "1.0").
+        Adjusts leaf area index and foliar biomass.
+        Valid range: >0, typically 0.5 to 2.0.
+        Use for: High fertility sites may have elevated leaf area indices.
+        Note: Affects photosynthesis and thus overall productivity.
 
     siteMultCortF : str, optional
-        Multiplier for cortex carbon (default: "1.0").
+        Site multiplier for forest coarse root biomass allocation (default: "1.0").
+        Adjusts belowground coarse root (>2mm diameter) allocation.
+        Valid range: >0, typically 0.5 to 2.0.
+        Use for: Adjust for soil depth, water table, or root restriction effects.
+        Note: Coarse roots typically scale with aboveground biomass but can vary with site.
 
     siteMultFirtF : str, optional
-        Multiplier for fine root carbon (default: "1.0").
+        Site multiplier for forest fine root biomass allocation (default: "1.0").
+        Adjusts fine root (<2mm diameter) biomass allocation.
+        Valid range: >0, typically 0.5 to 2.0.
+        Use for: Sites with variable soil fertility/moisture affecting fine root production.
+        Note: Fine roots highly variable; increase with low fertility or water stress.
 
     siteMultGbfrA : str, optional
-        Multiplier for agricultural grain/fruit (default: "1.0").
+        Site multiplier for agricultural grain/berry/fruit biomass (default: "1.0").
+        Adjusts harvestable product allocation for crops.
+        Valid range: >0, typically 0.5 to 2.0.
+        Use for: Site-specific harvest index adjustments.
+        Note: Equivalent to stem for agricultural system; represents economic yield.
 
     siteMultStlkA : str, optional
-        Multiplier for agricultural stalk (default: "1.0").
+        Site multiplier for agricultural stalk/stem biomass (default: "1.0").
+        Adjusts crop residue (stalk/straw) allocation.
+        Valid range: >0, typically 0.5 to 2.0.
+        Note: Stalk-to-grain ratio varies with fertility and management.
 
     siteMultLeafA : str, optional
-        Multiplier for agricultural leaf (default: "1.0").
+        Site multiplier for agricultural leaf biomass (default: "1.0").
+        Adjusts crop foliage allocation.
+        Valid range: >0, typically 0.5 to 2.0.
+        Note: Affects photosynthetic capacity during growing season.
 
     siteMultCortA : str, optional
-        Multiplier for agricultural cortex (default: "1.0").
+        Site multiplier for agricultural coarse root biomass (default: "1.0").
+        Adjusts belowground coarse root allocation for crops.
+        Valid range: >0, typically 0.5 to 2.0.
+        Note: Root crops (e.g., sugar beet, cassava) have high coarse root allocation.
 
     siteMultFirtA : str, optional
-        Multiplier for agricultural fine root (default: "1.0").
+        Site multiplier for agricultural fine root biomass (default: "1.0").
+        Adjusts fine root allocation for crops.
+        Valid range: >0, typically 0.5 to 2.0.
+        Note: Fine root allocation increases with low soil fertility.
 
     maxAbgMF : str, optional
         Maximum aboveground biomass for forest in Mg/ha (default: "").
@@ -547,81 +773,165 @@ def create_timeseries(
     Create TimeSeries element for climate, productivity, or management data.
 
     TimeSeries elements contain temporal data such as temperature, rainfall,
-    irrigation, or other time-varying parameters.
+    irrigation, or other time-varying parameters. Each time series type affects
+    specific model components (RothC for soil, CAMFor/CAMAg for biomass, 3PG for productivity).
 
     Parameters
     ----------
     tInTS : str
         Time series input type. Required parameter.
-        Common types:
-        - "avgAirTemp" = Average air temperature (°C monthly)
-        - "rainfall" = Rainfall (mm monthly)
-        - "openPanEvap" = Open pan evaporation (mm monthly)
-        - "forestProdIx" = Forest Productivity Index (annual)
-        - "defnitIrrigA" = Definite irrigation for agriculture (mm)
-        - "conditIrrigA" = Conditional irrigation (mm)
-        - "soilTemp" = Soil temperature (°C)
-        - "VPD" = Vapor Pressure Deficit
-        - "solarRad" = Solar radiation
-        - "fertility" = Soil fertility modifier
+
+        **Climate/Environmental Types:**
+
+        - "avgAirTemp" : Average air temperature (°C, typically monthly)
+            Used by RothC, CAMFor, and CAMAg for soil decomposition and tree growth.
+            Valid range: -50°C to 50°C for Australia.
+
+        - "rainfall" : Total rainfall/precipitation (mm, typically monthly)
+            Required by RothC for topsoil moisture deficit calculation.
+            100 mm = 1 megalitre per hectare. Range: 0 to ~2000 mm/month.
+
+        - "openPanEvap" : Open-pan evaporation (mm, typically monthly)
+            RothC uses this to calculate evapotranspiration and topsoil moisture deficit.
+            Evapotranspiration = openPanEvap × ratio (typically 0.75).
+
+        - "VPD" : Vapour Pressure Deficit (kPa, typically monthly)
+            Used by 3PG-lite for tree productivity; affects transpiration and growth.
+            Range: 0 to ~5 kPa (arid regions can exceed 3 kPa).
+
+        - "soilTemp" : Soil temperature (°C, typically monthly)
+            Affects decomposition rates in RothC; influences nutrient cycling.
+            Often derived from air temperature if direct measurements unavailable.
+
+        - "solarRad" : Mean daily solar radiation (MJ/m², typically monthly)
+            Used by 3PG-lite for photosynthesis and growth calculations.
+            Range: ~5 to 35 MJ/m²/day depending on latitude and season.
+
+        - "fertility" : Soil fertility modifier (dimensionless, monthly or annual)
+            Time-varying modifier for soil nutrient availability.
+            Range: >0, typically 0.5 to 1.5. Values >1 indicate enhanced fertility.
+
+        **Productivity Types:**
+
+        - "forestProdIx" : Forest Productivity Index (dimensionless, annual)
+            Annual forest productivity combining soil, sunlight, rainfall, evaporation, and frost.
+            Range: 0 to ~20 (higher = more productive). Used by Tree Yield Formula (TYF).
+            Growth multiplier = FPIt / FPIave. Described in NCAS Technical Report No.27.
+
+        **Irrigation Types:**
+
+        - "conditIrrigF" : Conditional irrigation for forest (%, varies)
+            Percentage of soil water capacity guaranteed by irrigation.
+            Range: 0-100%. Applied after rainfall and definite irrigation.
+
+        - "defnitIrrigF" : Definite irrigation for forest (mm, typically monthly)
+            Irrigation that definitely occurs regardless of conditions.
+            Use for known irrigation schedules; applied before conditional irrigation.
+
+        - "defnitIrrigA" : Definite irrigation for agriculture (mm, typically monthly)
+            Same as defnitIrrigF but for agricultural system.
+
+        - "conditIrrigA" : Conditional irrigation for agriculture (%, varies)
+            Same as conditIrrigF but for agricultural system.
 
     rawTS_values : list
         List of numeric values or empty strings. Required parameter.
-        Empty cells shown as empty string "".
+        Total count must equal nYrsTS × dataPerYrTS.
+        Use empty string "" for missing data (e.g., [1.5, "", 2.3]).
+        FullCAM automatically interpolates to match simulation timesteps.
 
     yr0TS : str, optional
-        Starting year (default: "2010").
+        Starting year for the time series (default: "2010").
+        Must be a 4-digit year string.
 
     nYrsTS : str, optional
         Number of years in time series (default: "1").
+        Must satisfy: len(rawTS_values) == int(nYrsTS) × int(dataPerYrTS).
 
     dataPerYrTS : str, optional
         Data points per year (default: "12").
-        - "12" = Monthly data (12 values per year)
-        - "1" = Annual data (1 value per year)
+        - "12" = Monthly data (most common for climate)
+        - "1" = Annual data (common for forestProdIx)
+        - "52" = Weekly data
+        - "365" = Daily data
 
     tExtrapTS : str, optional
-        Extrapolation method (default: "AvgYr").
-        - "AvgYr" = Average year (long-term mean)
-        - "HotYr" = Hot year scenario
-        - "WetYr" = Wet year scenario
-        - "DryYr" = Dry year scenario
+        Extrapolation method for years outside data range (default: "AvgYr").
+
+        - "AvgYr" : Uses nearest available year (first year before data, last year after data).
+            Most common for climate data.
+
+        - "CycYr" : Cycles through available years repeatedly.
+            Maintains year-to-year variability pattern.
+
+        - "HotYr" : Uses warmest year from dataset repeatedly.
+            For climate sensitivity analysis.
+
+        - "WetYr" : Uses wettest year from dataset repeatedly.
+            For wet year scenario analysis.
+
+        - "DryYr" : Uses driest year from dataset repeatedly.
+            For drought scenario analysis.
 
     tOriginTS : str, optional
         Time reference system (default: "Calendar").
         - "Calendar" = Calendar year (Jan-Dec)
-        - "Water" = Water year (varies by region)
+        - "Water" = Water year (varies by region, e.g., Jul-Jun)
 
     nDecPlacesTS : str, optional
-        Decimal places in data (default: "1").
+        Number of decimal places for data precision (default: "1").
+        Affects display and output formatting.
 
     colWidthTS : str, optional
-        Column width for UI display (default: "50").
+        Column width for UI display in pixels (default: "50").
 
     multTS : str, optional
-        Multiplier for values (default: "1.0").
+        Multiplier applied to all values (default: "1.0").
+        Useful for unit conversions or scaling adjustments.
 
     showGraphTS : bool, optional
-        Display graph in UI (default: True).
+        Whether to display graph in FullCAM UI (default: True).
 
     winstate_L : str, optional
-        Window left position (default: "10").
+        Window left position in pixels for UI (default: "10").
 
     winstate_T : str, optional
-        Window top position (default: "120").
+        Window top position in pixels for UI (default: "120").
 
     winstate_clientW : str, optional
-        Window client width (default: "702").
+        Window client width in pixels for UI (default: "702").
 
     winstate_clientH : str, optional
-        Window client height (default: "450").
+        Window client height in pixels for UI (default: "450").
 
     winstate_ws : str, optional
-        Window state (default: "Normal").
+        Window state for UI (default: "Normal").
+        Values: "Normal", "Minimized", "Maximized".
 
     Returns
     -------
-        XML string for TimeSeries element.
+    str
+        XML string for TimeSeries element formatted for FullCAM PLO file.
+
+    Notes
+    -----
+    - All temperature units in Celsius (°C)
+    - All water/precipitation units in millimeters (mm)
+    - All radiation units in MJ/m²
+    - All pressure units in kPa
+    - Time series data can be downloaded from Data Builder API for Australian locations
+    - Manual entry required for non-Australian locations or detailed site data
+
+    Examples
+    --------
+    >>> # Monthly temperature data for 2020
+    >>> temps = [15.68, 17.65, 13.03, 10.66, 5.53, 4.72,
+    ...          2.97, 3.65, 4.72, 9.66, 11.96, 15.80]
+    >>> ts = create_timeseries("avgAirTemp", temps, yr0TS="2020", nYrsTS="1", dataPerYrTS="12")
+
+    >>> # Annual Forest Productivity Index
+    >>> fpi = [8.5, 9.2, 7.8, 10.1, 8.9]
+    >>> ts = create_timeseries("forestProdIx", fpi, yr0TS="2015", nYrsTS="5", dataPerYrTS="1")
     """
     # Convert values list to comma-separated string
     rawTS_str = ",".join(str(v) if v != "" else "" for v in rawTS_values)
@@ -663,7 +973,7 @@ if __name__ == "__main__":
     print("\n" + "="*80 + "\n")
 
     # Example: Create Build section
-    build = create_build_section(148.16, -35.61, frCat="Plantation")
+    build = create_build_section(148.16, -35.61)
     print("Build Section:")
     print(build)
     print("\n" + "="*80 + "\n")

@@ -1,12 +1,15 @@
+import os
 import requests
-import json
-from typing import Dict, Any, Optional
 import pandas as pd
+
 from lxml import etree
 from io import StringIO
 
+
 # Configuration
-API_KEY = "50b1d2f22cb34a3eb0d76391f6ce59cb"
+API_KEY = os.getenv("FULLCAM_API_KEY")
+if not API_KEY: raise ValueError("`FULLCAM_API_KEY`environment variable not set!")
+
 BASE_URL_DATA = "https://api.dcceew.gov.au/climate/carbon-accounting/2024/data/v1"
 HEADERS = {
     "Host": "api.dcceew.gov.au",
@@ -19,12 +22,13 @@ HEADERS = {
 ENDPOINT = "/2024/data-builder/siteinfo"
 # Request parameters
 PARAMS = {
-    "latitude": -33.8688,
-    "longitude": 151.2093,
-    "area": "Cell",
+    "latitude": -35.61,
+    "longitude": 148.16,
+    "area": "OneKm",
     "plotT": "CompF",
     "frCat": "All",
-    "incGrowth": "false"
+    "incGrowth": "false",
+    "version": 2024
 }
 url = f"{BASE_URL_DATA}{ENDPOINT}"
 response = requests.get(url, params=PARAMS, headers=HEADERS, timeout=10)
@@ -36,10 +40,12 @@ with open('data/siteinfo_response.xml', 'wb') as f:
 # ----------------------- Species --------------------------
 ENDPOINT = "/2024/data-builder/species"
 PARAMS = {
-    "latitude": -33.8688,
-    "longitude": 151.2093,
+    "latitude": -35.61,
+    "longitude": 148.16,
+    "area": "OneKm",
+    "frCat": "Plantation",
     "specId": 8,            # Eucalyptus globulus, used as Carbon Plantations in LUTO
-    "frCat": "Plantation"
+    "version": 2024
 }
 url = f"{BASE_URL_DATA}{ENDPOINT}"
 response = requests.get(url, params=PARAMS, headers=HEADERS, timeout=10)
@@ -50,8 +56,8 @@ with open('data/species_response.xml', 'wb') as f:
 # ----------------------- Regimes --------------------------
 ENDPOINT = "/2024/data-builder/regimes"
 PARAMS = {
-    "latitude": -33.8688,
-    "longitude": 151.2093,
+    "latitude": -35.61,
+    "longitude": 148.16,
     "specId": 1,            # Eucalyptus globulus, used as Carbon Plantations in LUTO
     "frCat": "All"
 }
