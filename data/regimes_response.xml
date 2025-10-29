@@ -1,0 +1,7 @@
+<DocFragment Version="5009">
+  <RegimeList idSP="1">
+    <RegimeF idRG="59" tSuite="NPI" nmRG="Acacia mangium (ERF)" idSpecies="1" tSpecFrCat="All" rotLenRGF="Long" stateRGF="Any" npiRGF="Blank" yrStRGF="1970" yrEnRGF="2100" prevLUseRGF="Pasture" sitePrepRGF="None" ppWeedCntRGF="None" cultRGF="Spot" thinRGF="Thin0" pruneRGF="Prune0">
+      <RegimeEvent seq="1" ruleSet="=212,CPN(CWSW)=-212GP" tevREV="PlnF" idSP="1" eventNmREV="Plant trees: Acacia-mang seedlings - block geometry" patchinessGroup="0" patchiness="1.0" />
+    </RegimeF>
+  </RegimeList>
+</DocFragment>
