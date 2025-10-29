@@ -214,28 +214,34 @@ def create_config_section(
         Use for: Supplemental irrigation at specific dates/growth stages.
 
     userEventManA : bool, optional
-        Use event-based management for agricultural system (default: False).
-        When True: Tillage, harvest, grazing as discrete events.
-        When False: Continuous/time-series management.
-        Use for: Most agricultural systems with specific management dates.
+        Enable manure application events for agricultural system (default: False).
+        When True: Enables tracking of manure/organic amendments via time series.
+        When False: No manure applications modeled.
+        Use for: Agricultural systems with organic amendments, animal manure, or compost.
+        Note: Actual manure data specified in Mulch section TimeSeries 'manuCMFromOffsA'.
 
     userEventManF : bool, optional
-        Use event-based management for forest system (default: False).
-        When True: Thinning, harvest, fire as discrete events.
-        When False: Continuous management or no events.
-        Use for: Managed forests with scheduled operations (thinning, harvesting).
+        Enable manure application events for forest system (default: False).
+        When True: Enables tracking of organic amendments to forest systems.
+        When False: No organic amendments modeled.
+        Use for: Rare; some agroforestry or biosolids application scenarios.
+        Note: Actual manure data specified in Mulch section TimeSeries 'manuCMFromOffsF'.
 
     userEventNFeA : bool, optional
-        Enable nitrogen fertilizer events for agricultural system (default: True).
-        When True: Nitrogen fertilizer applications tracked and affect growth/soil.
-        When False: No nitrogen fertilizer effects modeled.
-        Use for: Most agricultural systems use fertilizer; set False only for organic/unfertilized systems.
+        Enable nitrogen fertilization tracking for agricultural system (default: False).
+        When True: Enables tracking of mineral nitrogen fertilizer inputs via time series.
+        When False: No nitrogen fertilizer tracking (can still run simulation).
+        Use for: Agricultural systems with synthetic fertilizer applications.
+        Note: Actual fertilizer data specified in Mnrl section TimeSeries 'mnrlNMFromOffsA'.
+        Requires userSoilMnrl="true" to function. All values default to 0.0 (no fertilization).
 
     userEventNFeF : bool, optional
-        Enable nitrogen fertilizer events for forest system (default: True).
-        When True: Nitrogen fertilizer applications tracked and affect forest growth.
-        When False: No nitrogen fertilizer effects modeled.
-        Use for: Plantation forests with fertilization programs; set False for natural forests.
+        Enable nitrogen fertilization tracking for forest system (default: False).
+        When True: Enables tracking of mineral nitrogen fertilizer inputs via time series.
+        When False: No nitrogen fertilizer tracking (can still run simulation).
+        Use for: Plantation forests with fertilization programs; rarely used for natural forests.
+        Note: Actual fertilizer data specified in Mnrl section TimeSeries 'mnrlNMFromOffsF'.
+        Requires userSoilMnrl="true" to function. All values default to 0.0 (no fertilization).
 
     userLogGrade : bool, optional
         Enable log quality grading for forest products (default: False).
@@ -244,23 +250,31 @@ def create_config_section(
         Use for: Commercial forestry with quality-dependent pricing and markets.
 
     userMulchA : bool, optional
-        Enable custom mulch layer for agricultural system (default: False).
-        When True: Separate mulch layer modeled (e.g., stubble retention).
-        When False: No explicit mulch layer.
-        Use for: Conservation agriculture with residue retention or surface mulching.
+        Enable mulch layer simulation for agricultural system (default: False).
+        When True: Models explicit surface mulch layer with microbial decomposition.
+                   Carbon flow: Debris → Mulch → Soil (3-stage decomposition).
+        When False: Debris breaks down directly to soil (2-stage decomposition).
+                    Carbon flow: Debris → Soil (bypasses mulch layer).
+        Use for: Conservation agriculture with stubble retention, crop residue management.
+        Note: Mulch section must exist in PLO file regardless; parameters are empty when False.
 
     userMulchF : bool, optional
-        Enable custom mulch layer for forest system (default: False).
-        When True: Separate forest floor mulch layer modeled.
-        When False: No explicit mulch layer.
-        Use for: Forests with thick litter layers or explicit litter management.
+        Enable mulch layer simulation for forest system (default: False).
+        When True: Models explicit forest floor mulch layer with microbial processes.
+                   Carbon flow: Litter → Mulch → Soil (3-stage decomposition).
+        When False: Litter breaks down directly to soil (2-stage decomposition).
+                    Carbon flow: Litter → Soil (bypasses mulch layer).
+        Use for: Forests with thick organic floor layers or explicit litter layer management.
+        Note: Mulch section must exist in PLO file regardless; parameters are empty when False.
 
     userN : bool, optional
-        Enable full nitrogen cycle calculations (default: False).
-        When True: Tracks nitrogen in all pools and fluxes; enables N₂O emissions.
-        When False: Carbon-only mode (faster computation).
-        Use for: Detailed nutrient cycling analysis, N₂O accounting, or nitrogen budget studies.
-        Note: Significantly increases computational complexity and runtime.
+        Enable full nitrogen cycle simulation (default: False).
+        When True: Tracks nitrogen in all pools, calculates N₂O/N₂ emissions, nitrification,
+                   denitrification, N fixation, and nitrogen limitation on growth.
+        When False: Carbon-only simulation (faster, simpler). Nitrogen cycling disabled.
+        Use for: N₂O greenhouse gas accounting, nitrogen budget studies, nutrient cycling.
+        Note: Significantly increases computational time. Independent of userSoilMnrl;
+              you can have userSoilMnrl="true" with userN="false" (structure exists but unused).
 
     userOpti : bool, optional
         Enable optimization mode for parameter fitting (default: False).
@@ -275,11 +289,14 @@ def create_config_section(
         Use for: Uncertainty analysis and parameter importance assessment.
 
     userSoilMnrl : bool, optional
-        Enable user-defined soil mineral (nitrogen) parameters (default: True).
-        When True: Allow manual soil nitrogen inputs and fertilizer specifications.
-        When False: Use only default soil mineral nitrogen values.
-        Use for: Most simulations need this True to specify fertilizer applications and N inputs.
-        Note: Required True if userEventNFeA or userEventNFeF is True.
+        Enable user-specified mineral nitrogen pool parameters (default: True).
+        When True: Allows editing of Mnrl section parameters (fertilization, deposition, etc.).
+                   Mnrl section and TimeSeries must exist in PLO file with defined values.
+        When False: Uses only FullCAM default mineral nitrogen parameters (non-editable).
+        Use for: Set True if you want to specify fertilizer inputs, N deposition, or customize
+                 nitrification/denitrification parameters. Independent of userN flag.
+        Note: Can be True while userN="false" - structure exists but N cycling is not simulated.
+              Required True if userEventNFeA or userEventNFeF is True.
 
     Returns
     -------
