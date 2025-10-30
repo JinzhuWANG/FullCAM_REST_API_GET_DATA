@@ -1,7 +1,9 @@
-import os,time
+import os,time,re
 import requests
 import pandas as pd
 import rioxarray as rio
+import xarray as xr
+import numpy as np
 
 from lxml import etree
 from io import StringIO
@@ -22,16 +24,43 @@ HEADERS = {
 }
 
 # Get all lon/lat for Australia; the raster used is taken from the template of LUTO
-Aus_xr = rio.open_rasterio("data/NLUM_2010-11_clip.tif").sel(band=1, drop=True).compute() > 0
-lon_lat = Aus_xr.to_dataframe(name='mask').reset_index().query('mask == True')[['x', 'y']].round({'x':2, 'y':2})
+Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True).compute() >= 0 # >=0 only includes LUTO study area
+lon_lat = Aus_xr.to_dataframe(name='mask').reset_index()[['y', 'x', 'mask']].round({'x':2, 'y':2})
+lon_lat['cell_idx'] = range(len(lon_lat))
+lon_lat['site_fetch'] = 'Untried'
+lon_lat['species_fetch'] = 'Untried'
 
-lon_lat['idx'] = range(len(lon_lat))
-lon_lat['site_fetch'] = False
-lon_lat['species_fetch'] = False
+
+Aus_cell = xr.DataArray(np.arange(Aus_xr.size).reshape(Aus_xr.shape), coords=Aus_xr.coords, dims=Aus_xr.dims)
+Aus_cell_RES5 = Aus_cell.coarsen(x=5, y=5, boundary='trim').max()
+Aus_cell_RES5_df = Aus_cell_RES5.to_dataframe(name='cell_idx').reset_index()[['y', 'x', 'cell_idx']]
+
+
+scrap_coords = lon_lat\
+    .loc[lon_lat['cell_idx'].isin(Aus_cell_RES5_df['cell_idx'])]\
+    .query('mask == True')
+
+
+
+# Remove existing downloaded files
+lon_lat_reg = re.compile(r'.*_(-?\d+\.\d+)_(-?\d+\.\d+)\.xml')
+
+existing_siteinfo = [lon_lat_reg.findall(f)[0] for f in os.listdir('downloaded') if f.startswith('siteInfo_')]
+existing_siteinfo = [(float(lat), float(lon)) for lon, lat in existing_siteinfo]
+
+existing_species = [lon_lat_reg.findall(f)[0] for f in os.listdir('downloaded') if f.startswith('species_')]
+existing_species = [(float(lat), float(lon)) for lon, lat in existing_species]
+
+
+scrap_coords_siteinfo = scrap_coords[~scrap_coords.set_index(['y', 'x']).index.isin(existing_siteinfo)].reset_index(drop=True)
+scrap_coords_species = scrap_coords[~scrap_coords.set_index(['y', 'x']).index.isin(existing_species)].reset_index(drop=True)
+
+
+
 
 
 # ----------------------- SiteInfo --------------------------
-def get_siteinfo(idx, lat, lon, try_number=10):
+def get_siteinfo(lat, lon, try_number=8):
     PARAMS = {
         "latitude": lat,
         "longitude": lon,
@@ -51,7 +80,7 @@ def get_siteinfo(idx, lat, lon, try_number=10):
             if response.status_code == 200:
                 with open(f'downloaded/siteInfo_{lon}_{lat}.xml', 'wb') as f:
                     f.write(response.content)
-                return idx, 'Success'
+                return
             else:
                 # HTTP error - apply backoff before retry
                 if attempt < try_number - 1:  # Don't sleep on last attempt
@@ -61,27 +90,21 @@ def get_siteinfo(idx, lat, lon, try_number=10):
             if attempt < try_number - 1:  # Don't sleep on last attempt
                 time.sleep(2**attempt)
 
-    return idx, "Failed"
+    return f'{lon},{lat}', "Failed"
 
 
 # Create tasks for parallel processing
-tasks = [delayed(get_siteinfo)(idx, lat, lon) 
-         for idx, lat, lon in tqdm(zip(lon_lat['idx'], lon_lat['y'], lon_lat['x']), total=len(lon_lat))
+tasks = [delayed(get_siteinfo)(lat, lon) 
+         for lat, lon in tqdm(zip(scrap_coords_siteinfo['y'], scrap_coords_siteinfo['x']), total=len(scrap_coords_siteinfo))
 ]
 
-
-status = []
-for rtn in tqdm(Parallel(n_jobs=50,  backend='threading', return_as='generator')(tasks), total=len(tasks)):
-    idx, msg = rtn
-    if msg != 'Success':
-        print(idx, msg)
-    status.append(rtn)
+for rtn in tqdm(Parallel(n_jobs=20,  backend='threading', return_as='generator_unordered')(tasks), total=len(tasks)):
+    if rtn is not None:
+        print(rtn)
     
 
-
-
 # ----------------------- Species --------------------------
-def get_species(idx, lat, lon, try_number=10):
+def get_species(lat, lon, try_number=8):
     
     url = f"{BASE_URL_DATA}/2024/data-builder/species"
     PARAMS = {
@@ -101,7 +124,7 @@ def get_species(idx, lat, lon, try_number=10):
             if response.status_code == 200:
                 with open(f'downloaded/species_{lon}_{lat}.xml', 'wb') as f:
                     f.write(response.content)
-                return idx, 'Success'
+                return
             else:
                 # HTTP error - apply backoff before retry
                 if attempt < try_number - 1:  # Don't sleep on last attempt
@@ -111,22 +134,17 @@ def get_species(idx, lat, lon, try_number=10):
             if attempt < try_number - 1:  # Don't sleep on last attempt
                 time.sleep(2**attempt)
                 
-    return idx, "Failed"
+    return f'{lon},{lat}', "Failed"
     
 # Create tasks for parallel processing
-tasks = [delayed(get_species)(idx, lat, lon)
-            for idx, lat, lon in tqdm(zip(lon_lat['idx'], lon_lat['y'], lon_lat['x']), total=len(lon_lat))
+tasks = [delayed(get_species)(lat, lon)
+            for lat, lon in tqdm(zip(scrap_coords_species['y'], scrap_coords_species['x']), total=len(scrap_coords_species))
         ]
 
-status = []
-for rtn in tqdm(Parallel(n_jobs=50,  backend='threading', return_as='generator')(tasks), total=len(tasks)):
-    idx, msg = rtn
-    if msg != 'Success':
-        print(idx, msg)
-    status.append(rtn)
-    
-    
-    
+for rtn in tqdm(Parallel(n_jobs=20,  backend='threading', return_as='generator_unordered')(tasks), total=len(tasks)):
+    if rtn is not None:
+        print(rtn)
+
     
 # # ----------------------- Regimes --------------------------
 # ENDPOINT = "/2024/data-builder/regimes"
@@ -143,48 +161,48 @@ for rtn in tqdm(Parallel(n_jobs=50,  backend='threading', return_as='generator')
 
 
 
-# ----------------------- Templates --------------------------
-ENDPOINT = "/2024/data-builder/templates"
-ARGUMENTS = {
-    'version' : 2024
-}
-url = f"{BASE_URL_DATA}{ENDPOINT}"
-response = requests.get(url, params=ARGUMENTS, headers=HEADERS, timeout=10)
+# # ----------------------- Templates --------------------------
+# ENDPOINT = "/2024/data-builder/templates"
+# ARGUMENTS = {
+#     'version' : 2024
+# }
+# url = f"{BASE_URL_DATA}{ENDPOINT}"
+# response = requests.get(url, params=ARGUMENTS, headers=HEADERS, timeout=10)
 
-with open('data/templates_response.xml', 'wb') as f:
-    f.write(response.content)
-
-
-# ----------------------- Template --------------------------
-ENDPOINT = "/2024/data-builder/template"
-ARGUMENTS = {
-    'templateName' : r"ERF\Environmental Plantings Method.plo",
-    'version' : 2024
-}
-url = f"{BASE_URL_DATA}{ENDPOINT}"
-
-response = requests.get(url, params=ARGUMENTS, headers=HEADERS, timeout=10)
-response.content
+# with open('data/templates_response.xml', 'wb') as f:
+#     f.write(response.content)
 
 
-with open('data/single_template_response.xml', 'wb') as f:
-    root = etree.fromstring(response.content)
-    document_plot = root.find('DocumentPlot')
-    f.write(etree.tostring(document_plot, pretty_print=True, xml_declaration=True, encoding='utf-8'))
+# # ----------------------- Template --------------------------
+# ENDPOINT = "/2024/data-builder/template"
+# ARGUMENTS = {
+#     'templateName' : r"ERF\Environmental Plantings Method.plo",
+#     'version' : 2024
+# }
+# url = f"{BASE_URL_DATA}{ENDPOINT}"
+
+# response = requests.get(url, params=ARGUMENTS, headers=HEADERS, timeout=10)
+# response.content
+
+
+# with open('data/single_template_response.xml', 'wb') as f:
+#     root = etree.fromstring(response.content)
+#     document_plot = root.find('DocumentPlot')
+#     f.write(etree.tostring(document_plot, pretty_print=True, xml_declaration=True, encoding='utf-8'))
     
 
 
-# ----------------------- Update data --------------------------  
-ENDPOINT = "/2024/data-builder/convert-plotfile"
-url = f"{BASE_URL_DATA}{ENDPOINT}"
+# # ----------------------- Update PLO --------------------------  
+# ENDPOINT = "/2024/data-builder/convert-plotfile"
+# url = f"{BASE_URL_DATA}{ENDPOINT}"
 
-with open("data/E_globulus_2024.plo", 'rb') as file:
-    file_data = file.read()
+# with open("data/E_globulus_2024.plo", 'rb') as file:
+#     file_data = file.read()
 
-response = requests.post(url, files={'file': ('test.plo', file_data)}, headers={"Ocp-Apim-Subscription-Key": API_KEY},  timeout=30)
+# response = requests.post(url, files={'file': ('test.plo', file_data)}, headers={"Ocp-Apim-Subscription-Key": API_KEY},  timeout=30)
 
-with open('data/updated_plotfile_response.xml', 'wb') as f:
-    f.write(response.content)
+# with open('data/updated_plotfile_response.xml', 'wb') as f:
+#     f.write(response.content)
 
 
 

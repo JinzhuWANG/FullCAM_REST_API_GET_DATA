@@ -1,8 +1,8 @@
-import requests
-from bs4 import BeautifulSoup
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Lock
+import requests
+
+from bs4 import BeautifulSoup
+from joblib import Parallel, delayed
 
 # URL to title mapping from the Table of Contents
 url_titles = {
@@ -446,7 +446,7 @@ def download_single_page(idx, url, session):
     return page_data
 
 
-def download_and_merge_html(max_workers=10):
+def download_and_merge_html(max_workers=100):
     """Download all URLs concurrently and merge into a single HTML file
 
     Args:
@@ -555,31 +555,21 @@ def download_and_merge_html(max_workers=10):
     <p style="text-align: center; color: #7f8c8d; margin-bottom: 40px;">Complete Reference Guide - All Pages Merged</p>
 """
 
-    # Download pages concurrently
-    print_lock = Lock()
-    page_results = {}
+    # Download pages concurrently using joblib
+    # Create tasks for parallel execution
+    tasks = [delayed(download_single_page)(idx, url, session)
+             for idx, url in enumerate(urls, 1)]
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all download tasks
-        future_to_idx = {
-            executor.submit(download_single_page, idx, url, session): idx
-            for idx, url in enumerate(urls, 1)
-        }
+    # Execute downloads in parallel
+    page_results_list = Parallel(n_jobs=max_workers, backend='threading', verbose=10)(tasks)
 
-        # Process completed downloads
-        for future in as_completed(future_to_idx):
-            idx = future_to_idx[future]
-            try:
-                result = future.result()
-                page_results[result['idx']] = result
+    # Convert list results to dictionary keyed by idx
+    page_results = {result['idx']: result for result in page_results_list}
 
-                with print_lock:
-                    status = "✓" if result['success'] else f"✗ ({result['error']})"
-                    print(f"[{result['idx']}/{len(urls)}] {urls[result['idx']-1].split('/')[-1]} ... {status}")
-
-            except Exception as e:
-                with print_lock:
-                    print(f"[{idx}/{len(urls)}] Exception: {str(e)[:50]}")
+    # Print summary of results
+    for result in page_results_list:
+        status = "✓" if result['success'] else f"✗ ({result['error']})"
+        print(f"[{result['idx']}/{len(urls)}] {urls[result['idx']-1].split('/')[-1]} ... {status}")
 
     # Sort results by index and build HTML
     successful_downloads = 0
@@ -608,7 +598,7 @@ def download_and_merge_html(max_workers=10):
     # Write the combined HTML file
     html_filename = "FullCAM_Documentation_Complete.html"
     try:
-        with open(html_filename, 'w', encoding='utf-8') as f:
+        with open(f'tools/{html_filename}', 'w', encoding='utf-8') as f:
             f.write('\n'.join(html_parts))
         print(f"\n✓ HTML file created: {html_filename}")
         print(f"Summary: {successful_downloads} successful, {failed_downloads} failed")
