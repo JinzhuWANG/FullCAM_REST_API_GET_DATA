@@ -39,39 +39,45 @@
   <InputElement tIn="tAirTemp" option="" value="TimeSeries" />
   <InputElement tIn="maxAbgMF" option="" value="979.239196777344" />
   <InputElement tIn="fpiAvgLT" option="" value="0.0" />
-  <ItemList count="33" id="FrSpecies">
+  <ItemList count="39" id="FrSpecies">
     <ItemInfo id="0" value="Acacia Forest and Woodlands" />
     <ItemInfo id="1" value="Acacia mangium" />
     <ItemInfo id="2" value="Acacia Open Woodland" />
     <ItemInfo id="3" value="Acacia Shrubland" />
+    <ItemInfo id="4" value="Callitris Forest and Woodlands" />
     <ItemInfo id="5" value="Casuarina Forest and Woodland" />
+    <ItemInfo id="6" value="Chenopod Shrub; Samphire Shrub and Forbland" />
+    <ItemInfo id="7" value="Environmental plantings" />
+    <ItemInfo id="8" value="Eucalyptus globulus" />
+    <ItemInfo id="9" value="Eucalyptus grandis" />
+    <ItemInfo id="10" value="Eucalyptus Low Open Forest" />
     <ItemInfo id="11" value="Eucalyptus nitens" />
     <ItemInfo id="12" value="Eucalyptus Open Forest" />
     <ItemInfo id="13" value="Eucalyptus Open Woodland" />
     <ItemInfo id="14" value="Eucalyptus Tall Open Forest" />
     <ItemInfo id="15" value="Eucalyptus urophylla or pellita" />
-    <ItemInfo id="17" value="Heath" />
     <ItemInfo id="16" value="Eucalyptus Woodland" />
+    <ItemInfo id="17" value="Heath" />
     <ItemInfo id="22" value="Low Closed Forest and Closed Shrublands" />
     <ItemInfo id="23" value="Mallee eucalypt species" />
     <ItemInfo id="24" value="Mallee Woodland and Shrubland" />
     <ItemInfo id="25" value="Mangrove" />
     <ItemInfo id="27" value="Melaleuca Forest and Woodland" />
+    <ItemInfo id="31" value="Native species and revegetation &lt;500mm rainfall" />
+    <ItemInfo id="32" value="Native species and revegetation &gt;=500mm rainfall" />
     <ItemInfo id="33" value="Native Species Regeneration &lt;500mm rainfall" />
     <ItemInfo id="34" value="Native Species Regeneration &gt;=500mm rainfall" />
     <ItemInfo id="38" value="Other acacia" />
     <ItemInfo id="39" value="Other eucalypts" />
     <ItemInfo id="40" value="Other Forests and Woodlands" />
+    <ItemInfo id="41" value="Other non-eucalypts hardwoods" />
     <ItemInfo id="42" value="Other Shrublands" />
     <ItemInfo id="43" value="Other softwoods" />
     <ItemInfo id="45" value="Pinus hybrids" />
     <ItemInfo id="46" value="Pinus pinaster" />
-    <ItemInfo id="4" value="Callitris Forest and Woodlands" />
     <ItemInfo id="47" value="Pinus radiata" />
     <ItemInfo id="48" value="Rainforest and vine thickets" />
     <ItemInfo id="49" value="Tropical Eucalyptus woodlands/grasslands" />
     <ItemInfo id="51" value="Unclassified Native vegetation" />
-    <ItemInfo id="31" value="Native species and revegetation &lt;500mm rainfall" />
-    <ItemInfo id="32" value="Native species and revegetation &gt;=500mm rainfall" />
   </ItemList>
 </DocFragment>

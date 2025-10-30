@@ -1,9 +1,13 @@
-import os
+import os,time
 import requests
 import pandas as pd
+import rioxarray as rio
 
 from lxml import etree
 from io import StringIO
+from joblib import Parallel, delayed
+from tqdm.auto import tqdm
+
 
 
 # Configuration
@@ -17,54 +21,125 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
+# Get all lon/lat for Australia; the raster used is taken from the template of LUTO
+Aus_xr = rio.open_rasterio("data/NLUM_2010-11_clip.tif").sel(band=1, drop=True).compute() > 0
+lon_lat = Aus_xr.to_dataframe(name='mask').reset_index().query('mask == True')[['x', 'y']].round({'x':2, 'y':2})
+
+lon_lat['idx'] = range(len(lon_lat))
+lon_lat['site_fetch'] = False
+lon_lat['species_fetch'] = False
+
 
 # ----------------------- SiteInfo --------------------------
-ENDPOINT = "/2024/data-builder/siteinfo"
-# Request parameters
-PARAMS = {
-    "latitude": -35.61,
-    "longitude": 148.16,
-    "area": "OneKm",
-    "plotT": "CompF",
-    "frCat": "All",
-    "incGrowth": "false",
-    "version": 2024
-}
-url = f"{BASE_URL_DATA}{ENDPOINT}"
-response = requests.get(url, params=PARAMS, headers=HEADERS, timeout=10)
+def get_siteinfo(idx, lat, lon, try_number=10):
+    PARAMS = {
+        "latitude": lat,
+        "longitude": lon,
+        "area": "OneKm",
+        "plotT": "CompF",
+        "frCat": "All",
+        "incGrowth": "false",
+        "version": 2024
+    }
+    url = f"{BASE_URL_DATA}/2024/data-builder/siteinfo"
+    
+    for attempt in range(try_number):
+        
+        try:
+            response = requests.get(url, params=PARAMS, headers=HEADERS, timeout=100)
 
-with open('data/siteinfo_response.xml', 'wb') as f:
-    f.write(response.content)
+            if response.status_code == 200:
+                with open(f'downloaded/siteInfo_{lon}_{lat}.xml', 'wb') as f:
+                    f.write(response.content)
+                return idx, 'Success'
+            else:
+                # HTTP error - apply backoff before retry
+                if attempt < try_number - 1:  # Don't sleep on last attempt
+                    time.sleep(2**attempt)
+
+        except requests.RequestException as e:
+            if attempt < try_number - 1:  # Don't sleep on last attempt
+                time.sleep(2**attempt)
+
+    return idx, "Failed"
+
+
+# Create tasks for parallel processing
+tasks = [delayed(get_siteinfo)(idx, lat, lon) 
+         for idx, lat, lon in tqdm(zip(lon_lat['idx'], lon_lat['y'], lon_lat['x']), total=len(lon_lat))
+]
+
+
+status = []
+for rtn in tqdm(Parallel(n_jobs=50,  backend='threading', return_as='generator')(tasks), total=len(tasks)):
+    idx, msg = rtn
+    if msg != 'Success':
+        print(idx, msg)
+    status.append(rtn)
+    
+
 
 
 # ----------------------- Species --------------------------
-ENDPOINT = "/2024/data-builder/species"
-PARAMS = {
-    "latitude": -35.61,
-    "longitude": 148.16,
-    "area": "OneKm",
-    "frCat": "Plantation",
-    "specId": 8,            # Eucalyptus globulus, used as Carbon Plantations in LUTO
-    "version": 2024
-}
-url = f"{BASE_URL_DATA}{ENDPOINT}"
-response = requests.get(url, params=PARAMS, headers=HEADERS, timeout=10)
-with open('data/species_response.xml', 'wb') as f:
-    f.write(response.content)
+def get_species(idx, lat, lon, try_number=10):
+    
+    url = f"{BASE_URL_DATA}/2024/data-builder/species"
+    PARAMS = {
+        "latitude": lat,
+        "longitude": lon,
+        "area": "OneKm",
+        "frCat": "Plantation",
+        "specId": 8,            # Eucalyptus globulus, used as Carbon Plantations in LUTO
+        "version": 2024
+    }
+    
+    for attempt in range(try_number):
+        
+        try:
+            response = requests.get(url, params=PARAMS, headers=HEADERS, timeout=100)
+
+            if response.status_code == 200:
+                with open(f'downloaded/species_{lon}_{lat}.xml', 'wb') as f:
+                    f.write(response.content)
+                return idx, 'Success'
+            else:
+                # HTTP error - apply backoff before retry
+                if attempt < try_number - 1:  # Don't sleep on last attempt
+                    time.sleep(2**attempt)
+
+        except requests.RequestException as e:
+            if attempt < try_number - 1:  # Don't sleep on last attempt
+                time.sleep(2**attempt)
+                
+    return idx, "Failed"
+    
+# Create tasks for parallel processing
+tasks = [delayed(get_species)(idx, lat, lon)
+            for idx, lat, lon in tqdm(zip(lon_lat['idx'], lon_lat['y'], lon_lat['x']), total=len(lon_lat))
+        ]
+
+status = []
+for rtn in tqdm(Parallel(n_jobs=50,  backend='threading', return_as='generator')(tasks), total=len(tasks)):
+    idx, msg = rtn
+    if msg != 'Success':
+        print(idx, msg)
+    status.append(rtn)
     
     
-# ----------------------- Regimes --------------------------
-ENDPOINT = "/2024/data-builder/regimes"
-PARAMS = {
-    "latitude": -35.61,
-    "longitude": 148.16,
-    "specId": 1,            # Eucalyptus globulus, used as Carbon Plantations in LUTO
-    "frCat": "All"
-}
-url = f"{BASE_URL_DATA}{ENDPOINT}"
-response = requests.get(url, params=PARAMS, headers=HEADERS, timeout=10)
-with open('data/regimes_response.xml', 'wb') as f:
-    f.write(response.content)
+    
+    
+# # ----------------------- Regimes --------------------------
+# ENDPOINT = "/2024/data-builder/regimes"
+# PARAMS = {
+#     "latitude": -35.61,
+#     "longitude": 148.16,
+#     "specId": 1,            # Eucalyptus globulus, used as Carbon Plantations in LUTO
+#     "frCat": "All"
+# }
+# url = f"{BASE_URL_DATA}{ENDPOINT}"
+# response = requests.get(url, params=PARAMS, headers=HEADERS, timeout=10)
+# with open('data/regimes_response.xml', 'wb') as f:
+#     f.write(response.content)
 
 
 

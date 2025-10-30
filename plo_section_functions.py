@@ -360,6 +360,22 @@ def create_timing_section(
         - "52" = Weekly timesteps (detailed crop growth)
         - "365" = Daily timesteps (detailed soil moisture/crop modeling)
         - "8760" = Hourly timesteps (research/detailed process studies)
+
+        IMPORTANT - Convergence and Limiting Values:
+        This parameter controls INTERNAL SIMULATION RESOLUTION (how many times per year carbon
+        moves between pools), not necessarily output resolution. As you increase stepsPerYrYTZ,
+        simulation results gradually approach "limiting values" where further increases produce
+        identical outputs. For typical forest carbon accounting with annual/monthly input data,
+        stepsPerYrYTZ="1" vs stepsPerYrYTZ="110" often produce the same annual carbon stocks
+        because:
+        - Input climate data (annual/monthly) gets interpolated equally across all steps
+        - Carbon pool dynamics converge to the same annual totals
+        - No sub-annual events (thinning, fire) occur that depend on specific step timing
+
+        To see different outputs with higher stepsPerYrYTZ values, you must ALSO adjust
+        stepsPerOutYTZ to control output frequency (e.g., stepsPerOutYTZ="1" outputs every
+        step; with stepsPerYrYTZ="110", this gives ~3.3-day resolution output).
+
         Note: Shorter timesteps increase computation time proportionally. Time series data
         automatically interpolated to match simulation timesteps.
 
@@ -428,14 +444,23 @@ def create_timing_section(
         Valid values: 1 to stepsPerYrYTZ.
         "1" = Output every timestep (most common).
         "12" = With monthly timesteps, outputs annually.
-        Use for: Reduce output file size for long simulations.
+
+        IMPORTANT - Relationship with stepsPerYrYTZ:
+        This parameter controls OUTPUT FREQUENCY independently from simulation resolution.
+        Examples:
+        - stepsPerYrYTZ="12", stepsPerOutYTZ="1" → Simulate monthly, output monthly (12 rows/year)
+        - stepsPerYrYTZ="12", stepsPerOutYTZ="12" → Simulate monthly, output annually (1 row/year)
+        - stepsPerYrYTZ="110", stepsPerOutYTZ="1" → Simulate 110 steps/year, output every step (110 rows/year)
+        - stepsPerYrYTZ="110", stepsPerOutYTZ="110" → Simulate 110 steps/year, output annually (1 row/year)
+
+        Use for: Reduce output file size for long simulations while maintaining fine simulation resolution.
         Example: 90-year simulation with monthly steps produces 1,080 output rows; set to "12" for 90 rows.
 
     firstOutStepYTZ : str, optional
         First timestep to include in yearly output (default: "1").
         "1" = Include first timestep (most common).
         Use for: Skip initial equilibration period in outputs.
-        Example: "121" skips first 10 years with monthly timesteps (10 × 12 = 120).
+        Example: "121" skips first 10 years with monthly timesteps (10 x 12 = 120).
 
     Returns
     -------
@@ -485,14 +510,40 @@ def create_build_section(
     frCat : str, optional
         Forest category controlling species availability and calibrations (default: "All").
 
+        IMPORTANT - What Are Calibrations?
+        Calibrations are statistically fitted parameters that control how trees grow and allocate
+        biomass. They are the "recipe" for species behavior under specific conditions, including:
+        - Growth rates (M = max biomass, G = age at peak growth, r = species adjustment)
+        - Biomass allocation ratios (stems vs branches vs roots - affects carbon storage)
+        - Turnover rates (how fast leaves/branches die and enter debris/soil pools)
+
+        Why Calibrations Matter:
+        Different forest categories use fundamentally different calibrations fitted to real data:
+        - Plantation calibrations: Fitted to commercial forestry (intensive management, fast
+          growth, high stem allocation, optimized spacing, 100% light capture)
+        - MVG calibrations: Fitted to native forests (natural competition, slower growth,
+          lower stem allocation, endemic canopy cover)
+
+        Using wrong calibrations = systematically biased carbon predictions (20-50% errors).
+        Example: Using native forest calibrations for commercial eucalyptus plantation
+        underestimates biomass by ~30% over the rotation period.
+
+        **For Commercial Eucalyptus globulus → Use "Plantation"**
+        - Provides hardwood plantation-specific growth calibrations
+        - Ensures species list appropriate for commercial forestry
+        - Optimized for timber/pulp plantation management scenarios
+
         - "All" or "null" : All Categories
             No filtering; all species and data types available.
-            Use for: When forest category not relevant or combining multiple types.
+            Use for: Exploration, research, or when unsure about land type.
+            Warning: May provide generic calibrations less accurate than category-specific ones.
 
         - "Plantation" : Commercial Plantation Species
             Commercial forestry species filtered by National Plantation Inventory (NPI) region.
-            Examples: Eucalyptus globulus, Pinus radiata.
-            Use for: Commercial timber plantations managed for harvest.
+            Provides plantation-specific growth calibrations (hardwood/softwood).
+            Examples: Eucalyptus globulus (hardwood), Pinus radiata (softwood).
+            Use for: Commercial timber/pulp plantations managed for harvest.
+            Best for: Standard carbon accounting for commercial forestry operations.
 
         - "MVG" : Major Vegetation Groups
             Native vegetation classified by structure/species (17 NVIS classes).
@@ -527,7 +578,7 @@ def create_build_section(
         Spatial averaging area for climate and soil data (default: "OneKm").
 
         - "Cell" : Single Grid Cell
-            Single cell from spatial data (~100m × 100m, ~1 ha depending on resolution).
+            Single cell from spatial data (~100m x 100m, ~1 ha depending on resolution).
             Use for: Precise location data; minimal spatial averaging.
             Note: Uses data from exact coordinates; sensitive to local anomalies.
 
@@ -810,7 +861,7 @@ def create_timeseries(
 
         - "openPanEvap" : Open-pan evaporation (mm, typically monthly)
             RothC uses this to calculate evapotranspiration and topsoil moisture deficit.
-            Evapotranspiration = openPanEvap × ratio (typically 0.75).
+            Evapotranspiration = openPanEvap x ratio (typically 0.75).
 
         - "VPD" : Vapour Pressure Deficit (kPa, typically monthly)
             Used by 3PG-lite for tree productivity; affects transpiration and growth.
@@ -853,7 +904,7 @@ def create_timeseries(
 
     rawTS_values : list
         List of numeric values or empty strings. Required parameter.
-        Total count must equal nYrsTS × dataPerYrTS.
+        Total count must equal nYrsTS x dataPerYrTS.
         Use empty string "" for missing data (e.g., [1.5, "", 2.3]).
         FullCAM automatically interpolates to match simulation timesteps.
 
@@ -863,7 +914,7 @@ def create_timeseries(
 
     nYrsTS : str, optional
         Number of years in time series (default: "1").
-        Must satisfy: len(rawTS_values) == int(nYrsTS) × int(dataPerYrTS).
+        Must satisfy: len(rawTS_values) == int(nYrsTS) x int(dataPerYrTS).
 
     dataPerYrTS : str, optional
         Data points per year (default: "12").

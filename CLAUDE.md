@@ -35,15 +35,20 @@ The codebase consists of two primary Python modules with distinct responsibiliti
 
 1. **`get_data.py`** - API interaction and data retrieval
    - Fetches site information, climate data, and species lists from FullCAM API
+   - Parallel processing for bulk data downloads across Australian locations
+   - Uses NLUM raster data to identify valid coordinates across Australia
    - Retrieves PLO templates from the FullCAM API
    - Submits PLO files for simulation and retrieves results (CSV format)
-   - Parses XML responses into usable Python structures
-   - Saves API responses to `data/` directory for caching and analysis
+   - Includes retry logic with exponential backoff for robust API calls
+   - Saves API responses to `downloaded/` directory for caching and analysis
 
 2. **`plo_section_functions.py`** - Modular PLO section builders
    - Individual functions for each PLO XML section
    - Required parameters listed first, optional parameters with defaults
    - Comprehensive NumPy-style docstrings with parameter descriptions
+   - Enhanced documentation on calibrations, convergence, and parameter relationships
+   - Critical guidance on forest category selection and its impact on carbon predictions
+   - Detailed explanations of simulation vs output resolution parameters
    - Functions: `create_meta_section()`, `create_config_section()`, `create_timing_section()`, `create_build_section()`, `create_site_section()`, `create_timeseries()`
    - Returns XML string fragments (no root wrapper or declaration)
 
@@ -135,6 +140,17 @@ DocumentPlot (root)
 
 ### Critical XML Attributes
 
+**IMPORTANT - Understanding Calibrations:**
+
+Calibrations are statistically fitted parameters that control tree growth and biomass allocation in FullCAM. They represent the "recipe" for species behavior under specific conditions. Different forest categories use fundamentally different calibrations:
+
+- **Plantation calibrations**: Fitted to commercial forestry data (intensive management, fast growth, high stem allocation, optimized spacing, 100% light capture)
+- **MVG (native) calibrations**: Fitted to natural forest data (natural competition, slower growth, lower stem allocation, endemic canopy cover)
+
+**Using wrong calibrations can result in 20-50% errors in carbon predictions.** For example, using native forest calibrations for a commercial eucalyptus plantation will systematically underestimate biomass by ~30% over the rotation period.
+
+**For commercial Eucalyptus globulus plantations → Always use `frCat="Plantation"`**
+
 **Plot Types (`tPlot` in Config):**
 - `CompF` - Forest Composite (above & below ground biomass)
 - `SoilF` - Forest soil analysis only
@@ -155,6 +171,24 @@ DocumentPlot (root)
 - `Hectare` - 1 hectare
 - `OneKm` - 1 km² (default, good for most cases)
 - `TwoKm`, `ThreeKm`, `FiveKm` - Larger averaging areas
+
+**IMPORTANT - Simulation Resolution vs Output Frequency:**
+
+Two independent parameters control simulation behavior in the Timing section:
+
+1. **`stepsPerYrYTZ`** - INTERNAL SIMULATION RESOLUTION (how many times per year carbon moves between pools)
+   - Common values: "1" (annual), "12" (monthly), "110" (~3.3 day resolution)
+   - Higher values approach "limiting values" where further increases produce identical outputs
+   - For typical forest carbon accounting with annual/monthly climate data, `stepsPerYrYTZ="1"` vs `stepsPerYrYTZ="110"` often produce the same annual carbon stocks
+
+2. **`stepsPerOutYTZ`** - OUTPUT FREQUENCY (how often results are written to CSV)
+   - Controls output file size independently from simulation accuracy
+   - Examples:
+     - `stepsPerYrYTZ="12"`, `stepsPerOutYTZ="1"` → Simulate monthly, output monthly (12 rows/year)
+     - `stepsPerYrYTZ="12"`, `stepsPerOutYTZ="12"` → Simulate monthly, output annually (1 row/year)
+     - `stepsPerYrYTZ="110"`, `stepsPerOutYTZ="110"` → Simulate 110 steps/year, output annually (1 row/year)
+
+**Key insight:** Increasing `stepsPerYrYTZ` without adjusting `stepsPerOutYTZ` may not change outputs because you're still only outputting at the same frequency. To see finer-resolution outputs, adjust both parameters.
 
 ### Time Series Types
 
@@ -238,7 +272,7 @@ Outputs formatted examples of each section type to the console.
 ```bash
 python get_data.py
 ```
-Fetches site info, species data, regimes, and templates from the FullCAM API. Saves responses to `data/` directory. Requires valid API key.
+Fetches site info and species data for all Australian locations using parallel processing (50 concurrent threads). Uses NLUM raster data to identify valid coordinates. Includes exponential backoff retry logic for robustness. Saves responses to `downloaded/` directory. Requires valid API key and NLUM raster file (`data/NLUM_2010-11_clip.tif`).
 
 ### File Locations
 
@@ -312,6 +346,68 @@ elif data_per_year == 1:  # Annual
 Set version in the `<DocumentPlot version="5009">` root element when assembling PLO files. API endpoints use `/2024/` in the path for current version.
 
 ## Common Patterns
+
+### Pattern: Parallel Bulk Data Download
+
+```python
+import rioxarray as rio
+from joblib import Parallel, delayed
+from tqdm.auto import tqdm
+import time
+import requests
+
+# Load Australian coordinates from NLUM raster
+Aus_xr = rio.open_rasterio("data/NLUM_2010-11_clip.tif").sel(band=1, drop=True).compute() > 0
+lon_lat = Aus_xr.to_dataframe(name='mask').reset_index().query('mask == True')[['x', 'y']].round({'x':2, 'y':2})
+
+# Define retry function with exponential backoff
+def get_siteinfo(idx, lat, lon, try_number=10):
+    PARAMS = {
+        "latitude": lat,
+        "longitude": lon,
+        "area": "OneKm",
+        "plotT": "CompF",
+        "frCat": "All",
+        "incGrowth": "false",
+        "version": 2024
+    }
+    url = f"{BASE_URL_DATA}/2024/data-builder/siteinfo"
+
+    for attempt in range(try_number):
+        try:
+            response = requests.get(url, params=PARAMS, headers=HEADERS, timeout=100)
+            if response.status_code == 200:
+                with open(f'downloaded/siteInfo_{lon}_{lat}.xml', 'wb') as f:
+                    f.write(response.content)
+                return idx, 'Success'
+            else:
+                if attempt < try_number - 1:
+                    time.sleep(2**attempt)
+        except requests.RequestException:
+            if attempt < try_number - 1:
+                time.sleep(2**attempt)
+
+    return idx, "Failed"
+
+# Create parallel tasks
+tasks = [delayed(get_siteinfo)(idx, lat, lon)
+         for idx, lat, lon in zip(lon_lat.index, lon_lat['y'], lon_lat['x'])]
+
+# Execute with progress bar (50 concurrent threads)
+status = []
+for rtn in tqdm(Parallel(n_jobs=50, backend='threading', return_as='generator')(tasks), total=len(tasks)):
+    idx, msg = rtn
+    if msg != 'Success':
+        print(idx, msg)
+    status.append(rtn)
+```
+
+This pattern demonstrates:
+- Loading Australian coordinates from geospatial raster data
+- Parallel API requests with configurable concurrency (50 threads)
+- Exponential backoff retry logic (2^attempt seconds)
+- Progress tracking with tqdm
+- Robust error handling for network failures
 
 ### Pattern: Build PLO from API Data
 
@@ -512,12 +608,15 @@ The codebase requires:
 - `requests` - HTTP requests to FullCAM API
 - `lxml` - XML parsing and generation
 - `pandas` - Data manipulation and CSV handling
+- `rioxarray` - Geospatial raster data handling (NLUM coordinate extraction)
+- `joblib` - Parallel processing for bulk API calls
+- `tqdm` - Progress bars for long-running operations
 - `json` - JSON handling (minimal usage)
 - `typing` - Type hints
 
 No requirements.txt exists. Typical installation:
 ```bash
-pip install requests lxml pandas
+pip install requests lxml pandas rioxarray joblib tqdm
 ```
 
 ## Important Constraints
