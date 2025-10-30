@@ -9,7 +9,8 @@
       "Bash(git add:*)",
       "Bash(git commit -m \"$(cat <<''EOF''\nUpdate project documentation and add README\n\n- Restructure CLAUDE.md with comprehensive developer guide\n- Add detailed architecture and usage patterns\n- Document modular PLO section function approach\n- Include FullCAM documentation reference\n- Add new README.md for user-facing documentation\n- Create .gitignore to exclude Python cache and sensitive files\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(git rm:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
