@@ -79,36 +79,37 @@ def create_meta_section(
 
 
 def create_config_section(
-    tPlot: str = "CompF",
-    rothCVers: str = "Vers263",
-    tTreeProd: str = "TYF",
+    tPlot: str              = "CompF",
+    userSoilMnrl: bool      = True,
+    userMulchF: bool        = False,
+    userMulchA: bool        = False,
+    tTreeProd: str          = "TYF",
     userCalcFPI: bool       = False,
+    userCalcModTemp: bool   = False,
     userCalcModASW: bool    = False,
     userCalcModFrost: bool  = False,
-    userCalcModTemp: bool   = False,
-    userCropGrade: bool     = False,
+    userN: bool             = False,
     userDispEner: bool      = False,
     userDispProd: bool      = False,
-    userEcon: bool          = False,
-    userEventIrrA: bool     = False,
     userEventIrrF: bool     = False,
-    userEventManA: bool     = False,
-    userEventManF: bool     = False,
-    userEventNFeA: bool     = True,
+    userEventIrrA: bool     = False,
     userEventNFeF: bool     = True,
-    userLogGrade: bool      = False,
-    userMulchA: bool        = False,
-    userMulchF: bool        = False,
-    userN: bool             = False,
-    userOpti: bool          = False,
+    userEventNFeA: bool     = True,
+    userEventManF: bool     = False,
+    userEventManA: bool     = False,
+    rothCVers: str          = "Vers263",
     userSens: bool          = False,
-    userSoilMnrl: bool      = True
+    userOpti: bool          = False,
+    userEcon: bool          = False,
+    userLogGrade: bool      = False,
+    userCropGrade: bool     = False
 ) -> str:
     """
     Create Config section for PLO file with simulation configuration.
 
     The Config section controls calculation modules, parameters, and the type
     of analysis to be performed.
+    
 
     Parameters
     ----------
@@ -138,12 +139,54 @@ def create_config_section(
             Use for: Woodland grazing, deforestation/reforestation transitions, agroforestry.
             Note: Forest percentage can vary; systems share climate but have separate irrigation.
 
-    rothCVers : str, optional
-        RothC soil carbon model version (default: "Vers263").
+    userSoilMnrl : bool, optional
+        Enable mineral nitrogen layer simulation (default: True).
 
-        - "Vers263" : RothC Version 2.6.3 (current standard for Australian National Inventory)
-            Features: 5-pool model (DPM, RPM, BIO, HUM, IOM), monthly/finer timesteps,
-            temperature and moisture modifiers, clay content effects.
+        **CRITICAL - REQUIRED FOR SOIL CARBON SIMULATION:**
+        Despite its name suggesting "mineral nitrogen", this parameter is REQUIRED to simulate
+        soil carbon in forest composite plots (tPlot="CompF"). The RothC soil model requires
+        the mineral nitrogen pool to be enabled to run properly.
+
+        When True: Enables mineral nitrogen pool; allows RothC soil model to run.
+                   - Soil carbon (tC/ha) WILL appear in simulation outputs
+                   - Mnrl section and TimeSeries exist in PLO file
+                   - Enables nitrogen limitation on decomposition/growth (even if userN="false")
+                   - Allows editing fertilization, N deposition, nitrification parameters
+
+        When False: Disables mineral nitrogen pool; prevents RothC from running.
+                    - Soil carbon (tC/ha) will be MISSING from simulation outputs
+                    - Only plant and debris carbon will be tracked
+                    - Cannot model soil carbon dynamics or accumulation
+
+        Use for: **ALWAYS set True for forest carbon accounting that includes soil carbon.**
+                 Only set False for specialized cases where soil layer not needed (rare).
+
+        Relationship with userN:
+        - userSoilMnrl="true" + userN="false": Soil carbon simulated WITHOUT full N cycling
+          (nitrogen structure exists but N limitation/tracking disabled; typical use case)
+        - userSoilMnrl="true" + userN="true": Soil carbon simulated WITH full N cycling
+          (includes N₂O emissions, nitrogen limitation, full N budget; advanced use)
+        - userSoilMnrl="false": Soil carbon NOT simulated regardless of userN setting
+
+        Note: Required True if userEventNFeA or userEventNFeF is True (fertilizer tracking).
+
+    userMulchF : bool, optional
+        Enable mulch layer simulation for forest system (default: False).
+        When True: Models explicit forest floor mulch layer with microbial processes.
+                   Carbon flow: Litter → Mulch → Soil (3-stage decomposition).
+        When False: Litter breaks down directly to soil (2-stage decomposition).
+                    Carbon flow: Litter → Soil (bypasses mulch layer).
+        Use for: Forests with thick organic floor layers or explicit litter layer management.
+        Note: Mulch section must exist in PLO file regardless; parameters are empty when False.
+
+    userMulchA : bool, optional
+        Enable mulch layer simulation for agricultural system (default: False).
+        When True: Models explicit surface mulch layer with microbial decomposition.
+                   Carbon flow: Debris → Mulch → Soil (3-stage decomposition).
+        When False: Debris breaks down directly to soil (2-stage decomposition).
+                    Carbon flow: Debris → Soil (bypasses mulch layer).
+        Use for: Conservation agriculture with stubble retention, crop residue management.
+        Note: Mulch section must exist in PLO file regardless; parameters are empty when False.
 
     tTreeProd : str, optional
         Tree productivity/growth model (default: "TYF").
@@ -159,6 +202,12 @@ def create_config_section(
         When False: Use downloaded FPI data from Data Builder.
         Use for: Site-specific FPI calibration or when downloaded data inadequate.
 
+    userCalcModTemp : bool, optional
+        Enable custom temperature modifier for tree growth (default: False).
+        When True: User provides temperature modifier time series.
+        When False: Use standard temperature response curves.
+        Use for: Species with non-standard temperature responses requiring custom calibration.
+
     userCalcModASW : bool, optional
         Enable custom available soil water modifier (default: False).
         When True: User overrides RothC default soil water modifier affecting decomposition.
@@ -171,17 +220,14 @@ def create_config_section(
         When False: No frost effects or use defaults.
         Use for: High-elevation or frost-prone sites where frost significantly limits growth.
 
-    userCalcModTemp : bool, optional
-        Enable custom temperature modifier for tree growth (default: False).
-        When True: User provides temperature modifier time series.
-        When False: Use standard temperature response curves.
-        Use for: Species with non-standard temperature responses requiring custom calibration.
-
-    userCropGrade : bool, optional
-        Enable crop quality grading/classification (default: False).
-        When True: Detailed crop product quality tracking enabled.
-        When False: All crop output treated uniformly.
-        Use for: Agricultural systems with quality-dependent pricing or management.
+    userN : bool, optional
+        Enable full nitrogen cycle simulation (default: False).
+        When True: Tracks nitrogen in all pools, calculates N₂O/N₂ emissions, nitrification,
+                   denitrification, N fixation, and nitrogen limitation on growth.
+        When False: Carbon-only simulation (faster, simpler). Nitrogen cycling disabled.
+        Use for: N₂O greenhouse gas accounting, nitrogen budget studies, nutrient cycling.
+        Note: Significantly increases computational time. Independent of userSoilMnrl;
+              you can have userSoilMnrl="true" with userN="false" (structure exists but unused).
 
     userDispEner : bool, optional
         Enable energy disposition tracking (default: False).
@@ -195,92 +241,234 @@ def create_config_section(
         When False: Standard outputs only.
         Use for: Detailed growth analysis, research, or model calibration.
 
-    userEcon : bool, optional
-        Enable economic analysis module (default: False).
-        When True: Calculates net present value, costs, revenues for project.
-        When False: No economic calculations (carbon accounting only).
-        Use for: Financial feasibility analysis for forestry or agricultural projects.
+    userEventIrrF : bool, optional
+        Control irrigation input method for forest system (default: False).
+
+        **Data Source Selector:**
+        This flag controls the data SOURCE for irrigation inputs.
+
+        When False: Use TIME SERIES data source
+                    - Data specified in <TimeSeries/> elements 'defnitIrrigF' or 'conditIrrigF'
+                    - Continuous irrigation schedule (e.g., monthly mm values)
+                    - **REQUIRES irrigation <TimeSeries/> to exist in PLO file**
+                    - Even for "no irrigation", must include <TimeSeries/> with all zeros
+
+        When True: Use EVENTS data source (RECOMMENDED for no irrigation)
+                   - Data specified in <Event/> elements with specific dates/amounts
+                   - Discrete irrigation applications at specific points in time
+                   - **For NO irrigation: Set True and simply don't create irrigation events**
+                   - Cleaner approach: no <TimeSeries/> sections needed
+
+        **IMPORTANT - How to Configure "No Irrigation" (Dryland Plantations):**
+
+        Option 1 - Event Mode (RECOMMENDED):
+            - Set userEventIrrF="true" in <Config/>
+            - Remove all irrigation <TimeSeries/> (defnitIrrigF, conditIrrigF) from PLO file
+            - Don't add any irrigation change events to <RegimeSet/>
+            - Result: No irrigation applied; cleanest approach
+
+        Option 2 - Time Series Mode with Zeros:
+            - Set userEventIrrF="false" in <Config/>
+            - Include defnitIrrigF <TimeSeries/> with all zeros (e.g., 0.0,0.0,0.0,...,0.0)
+            - Set conditIrrigOnF="false" in <Site/> section
+            - Result: No irrigation applied; explicit about absence of irrigation
+
+        According to FullCAM documentation:
+        "If you do not want any of a particular input (for example, there is no irrigation
+        in your simulation), it is easiest to set its input type to Events, but do not
+        create any events of that type. This way you will not be asked for the time
+        series input."
+
+        **Schema Requirements:**
+        - userEventIrrF="false" → defnitIrrigF <TimeSeries/> MUST exist (even if all zeros)
+        - userEventIrrF="true" → defnitIrrigF <TimeSeries/> should be REMOVED from file
+        - Mismatch causes validation errors or undefined behavior
+
+        Note: "There is no irrigation at the beginning of a simulation. Irrigation begins
+              with the first irrigation event." So with no events, there's never irrigation.
+
+        Use for: Set True for dryland systems or supplemental irrigation at specific dates.
+                 Set False only when you have regular irrigation schedules to specify.
 
     userEventIrrA : bool, optional
-        Use event-based irrigation for agricultural system (default: False).
-        When True: Irrigation specified as discrete events (date, amount).
-        When False: Use time series for irrigation.
-        Use for: Irregular irrigation schedules or precisely scheduled applications.
+        Control irrigation input method for agricultural system (default: False).
 
-    userEventIrrF : bool, optional
-        Use event-based irrigation for forest system (default: False).
-        When True: Forest irrigation specified as events.
-        When False: Use time series for irrigation.
-        Use for: Supplemental irrigation at specific dates/growth stages.
+        **Data Source Selector:**
+        This flag controls the data SOURCE for irrigation inputs.
 
-    userEventManA : bool, optional
-        Enable manure application events for agricultural system (default: False).
-        When True: Enables tracking of manure/organic amendments via time series.
-        When False: No manure applications modeled.
-        Use for: Agricultural systems with organic amendments, animal manure, or compost.
-        Note: Actual manure data specified in Mulch section TimeSeries 'manuCMFromOffsA'.
+        When False: Use TIME SERIES data source
+                    - Data specified in <TimeSeries/> elements 'defnitIrrigA' or 'conditIrrigA'
+                    - Continuous irrigation schedule (e.g., monthly mm values)
+                    - **REQUIRES irrigation <TimeSeries/> to exist in PLO file**
+                    - Even for "no irrigation", must include <TimeSeries/> with all zeros
 
-    userEventManF : bool, optional
-        Enable manure application events for forest system (default: False).
-        When True: Enables tracking of organic amendments to forest systems.
-        When False: No organic amendments modeled.
-        Use for: Rare; some agroforestry or biosolids application scenarios.
-        Note: Actual manure data specified in Mulch section TimeSeries 'manuCMFromOffsF'.
+        When True: Use EVENTS data source (RECOMMENDED for no irrigation)
+                   - Data specified in <Event/> elements with specific dates/amounts
+                   - Discrete irrigation applications at specific points in time
+                   - **For NO irrigation: Set True and simply don't create irrigation events**
+                   - Cleaner approach: no <TimeSeries/> sections needed
 
-    userEventNFeA : bool, optional
-        Enable nitrogen fertilization tracking for agricultural system (default: False).
-        When True: Enables tracking of mineral nitrogen fertilizer inputs via time series.
-        When False: No nitrogen fertilizer tracking (can still run simulation).
-        Use for: Agricultural systems with synthetic fertilizer applications.
-        Note: Actual fertilizer data specified in Mnrl section TimeSeries 'mnrlNMFromOffsA'.
-        Requires userSoilMnrl="true" to function. All values default to 0.0 (no fertilization).
+        **IMPORTANT - How to Configure "No Irrigation" (Dryland Agriculture):**
+
+        Option 1 - Event Mode (RECOMMENDED):
+            - Set userEventIrrA="true" in <Config/>
+            - Remove all irrigation <TimeSeries/> (defnitIrrigA, conditIrrigA) from PLO file
+            - Don't add any irrigation change events to <RegimeSet/>
+            - Result: No irrigation applied; cleanest approach
+
+        Option 2 - Time Series Mode with Zeros:
+            - Set userEventIrrA="false" in <Config/>
+            - Include defnitIrrigA <TimeSeries/> with all zeros (e.g., 0.0,0.0,0.0,...,0.0)
+            - Set conditIrrigOnA="false" in <Site/> section
+            - Result: No irrigation applied; explicit about absence of irrigation
+
+        **Schema Requirements:**
+        - userEventIrrA="false" → defnitIrrigA <TimeSeries/> MUST exist (even if all zeros)
+        - userEventIrrA="true" → defnitIrrigA <TimeSeries/> should be REMOVED from file
+        - Mismatch causes validation errors or undefined behavior
+
+        Use for: Set True for irregular irrigation schedules or precisely scheduled applications.
+                 Set False for regular irrigation schedules (weekly/monthly patterns).
 
     userEventNFeF : bool, optional
-        Enable nitrogen fertilization tracking for forest system (default: False).
-        When True: Enables tracking of mineral nitrogen fertilizer inputs via time series.
-        When False: No nitrogen fertilizer tracking (can still run simulation).
-        Use for: Plantation forests with fertilization programs; rarely used for natural forests.
-        Note: Actual fertilizer data specified in Mnrl section TimeSeries 'mnrlNMFromOffsF'.
-        Requires userSoilMnrl="true" to function. All values default to 0.0 (no fertilization).
+        Control nitrogen fertilizer input method for forest system (default: True).
 
-    userLogGrade : bool, optional
-        Enable log quality grading for forest products (default: False).
-        When True: Logs graded by size, quality for detailed product tracking.
-        When False: Uniform log quality.
-        Use for: Commercial forestry with quality-dependent pricing and markets.
+        **IMPORTANT - Data Source Selector, NOT On/Off Switch:**
+        This flag controls the data SOURCE for nitrogen fertilizer inputs.
 
-    userMulchA : bool, optional
-        Enable mulch layer simulation for agricultural system (default: False).
-        When True: Models explicit surface mulch layer with microbial decomposition.
-                   Carbon flow: Debris → Mulch → Soil (3-stage decomposition).
-        When False: Debris breaks down directly to soil (2-stage decomposition).
-                    Carbon flow: Debris → Soil (bypasses mulch layer).
-        Use for: Conservation agriculture with stubble retention, crop residue management.
-        Note: Mulch section must exist in PLO file regardless; parameters are empty when False.
+        When False: Use TIME SERIES data source
+                    - Fertilizer data specified in <TimeSeries/> element 'mnrlNMFromOffsF' (tN/ha per timestep)
+                    - Continuous application over time based on time series values
+                    - Example: Annual fertilizer application schedule
 
-    userMulchF : bool, optional
-        Enable mulch layer simulation for forest system (default: False).
-        When True: Models explicit forest floor mulch layer with microbial processes.
-                   Carbon flow: Litter → Mulch → Soil (3-stage decomposition).
-        When False: Litter breaks down directly to soil (2-stage decomposition).
-                    Carbon flow: Litter → Soil (bypasses mulch layer).
-        Use for: Forests with thick organic floor layers or explicit litter layer management.
-        Note: Mulch section must exist in PLO file regardless; parameters are empty when False.
+        When True: Use EVENTS data source
+                   - Fertilizer data specified in <Event/> elements with specific dates/amounts
+                   - Discrete applications at specific points in time
+                   - Example: Single 100 tN/ha application at year 5 after planting
 
-    userN : bool, optional
-        Enable full nitrogen cycle simulation (default: False).
-        When True: Tracks nitrogen in all pools, calculates N₂O/N₂ emissions, nitrification,
-                   denitrification, N fixation, and nitrogen limitation on growth.
-        When False: Carbon-only simulation (faster, simpler). Nitrogen cycling disabled.
-        Use for: N₂O greenhouse gas accounting, nitrogen budget studies, nutrient cycling.
-        Note: Significantly increases computational time. Independent of userSoilMnrl;
-              you can have userSoilMnrl="true" with userN="false" (structure exists but unused).
+        **CRITICAL - Requires Nitrogen Cycling to be Enabled:**
+        This flag only affects simulations when userN="true" (nitrogen cycling enabled).
+        If userN="false" (carbon-only mode), fertilizer inputs are COMPLETELY IGNORED regardless
+        of this setting. The model will produce identical results whether userEventNFeF is true
+        or false when nitrogen cycling is disabled.
 
-    userOpti : bool, optional
-        Enable optimization mode for parameter fitting (default: False).
-        When True: FullCAM performs automated parameter optimization.
-        When False: Standard simulation mode.
-        Use for: Calibration of model parameters to match observed data.
+        Requirements:
+        - userSoilMnrl="true" (mineral nitrogen pool must exist)
+        - userN="true" for fertilizer to actually affect results
+        - Either time series data (mnrlNMFromOffsF) OR event data must contain non-zero values
+
+        Use for: Plantation forests with fertilization programs where nitrogen limitation affects
+                 growth or N₂O emissions tracking is required. Rarely used for natural forests.
+
+    userEventNFeA : bool, optional
+        Control nitrogen fertilizer input method for agricultural system (default: True).
+
+        **IMPORTANT - Data Source Selector, NOT On/Off Switch:**
+        This flag controls the data SOURCE for nitrogen fertilizer inputs.
+
+        When False: Use TIME SERIES data source
+                    - Fertilizer data specified in <TimeSeries/> element 'mnrlNMFromOffsA' (tN/ha per timestep)
+                    - Continuous application over time based on time series values
+                    - Example: Monthly fertilizer schedule with varying rates
+
+        When True: Use EVENTS data source
+                   - Fertilizer data specified in <Event/> elements with specific dates/amounts
+                   - Discrete applications at specific points in time
+                   - Example: Single 50 tN/ha application on 2020-06-15
+
+        **CRITICAL - Requires Nitrogen Cycling to be Enabled:**
+        This flag only affects simulations when userN="true" (nitrogen cycling enabled).
+        If userN="false" (carbon-only mode), fertilizer inputs are COMPLETELY IGNORED regardless
+        of this setting. The model will produce identical results whether userEventNFeA is true
+        or false when nitrogen cycling is disabled.
+
+        Requirements:
+        - userSoilMnrl="true" (mineral nitrogen pool must exist)
+        - userN="true" for fertilizer to actually affect results
+        - Either time series data (mnrlNMFromOffsA) OR event data must contain non-zero values
+
+        Use for: Agricultural systems with synthetic nitrogen fertilizer applications where
+                 nitrogen limitation affects crop growth or N₂O emissions tracking is required.
+
+    userEventManF : bool, optional
+        Control manure-from-offsite input method for forest system (default: False).
+
+        **Data Source Selector:**
+        This flag controls the data SOURCE for manure-from-offsite inputs.
+
+        When False: Use TIME SERIES data source
+                    - Data specified in <TimeSeries/> element 'manuCMFromOffsF' (tC/ha per year)
+                    - Continuous manure application schedule over time
+
+        When True: Use EVENTS data source
+                   - Data specified in <Event/> elements with specific dates/amounts
+                   - Discrete manure applications at specific points in time
+
+        **Important - "From Offsite" Means External Sources:**
+        "Offsite" means manure or organic amendments brought FROM OUTSIDE THE PLOT:
+        - Biosolids from wastewater treatment applied to forestry
+        - Compost applications in urban forestry
+        - Paper mill sludge applied to plantation forests
+        - Poultry litter applied to eucalyptus plantations (some regions)
+
+        Manure Properties:
+        - Manure carbon enters RothC soil pools (typically 49% DPM, 49% RPM, 2% HUM)
+        - Can include both carbon and nitrogen components
+        - Requires RothC soil model to be active (CompF plot type)
+
+        Note: Switching between true/false has no effect if manure data is zero or missing
+              in both time series AND events. Only affects results when manure data exists.
+
+        Use for: RARE in forest systems. Primarily used for:
+                 - Biosolids application programs in commercial plantations
+                 - Urban forestry with compost amendments
+                 - Agroforestry systems with livestock integration
+                 - Research trials with organic amendment treatments
+
+    userEventManA : bool, optional
+        Control manure-from-offsite input method for agricultural system (default: False).
+
+        **Data Source Selector:**
+        This flag controls the data SOURCE for manure-from-offsite inputs.
+
+        When False: USE TIME SERIES data source
+                    - Data specified in <TimeSeries/> element 'manuCMFromOffsA' (tC/ha per year)
+                    - Continuous manure application schedule over time
+
+        When True: Use EVENTS data source
+                   - Data specified in <Event/> elements with specific dates/amounts
+                   - Discrete manure applications at specific points in time
+
+        **Important - "From Offsite" Means External Sources:**
+        "Offsite" means manure brought FROM OUTSIDE THE PLOT, such as:
+        - Imported animal manure from external farms/feedlots
+        - Biosolids from wastewater treatment
+        - Compost from external composting facilities
+        - Green waste amendments from offsite sources
+
+        This is SEPARATE from manure produced by grazing animals ON the plot:
+        - On-plot grazing manure is handled automatically through grazing events
+        - Fodder eaten by grazers → manure destinations (DPM/RPM soil pools, atmosphere)
+        - No manual input needed for on-plot grazing manure
+
+        Manure Properties:
+        - Manure carbon enters RothC soil pools (typically 49% DPM, 49% RPM, 2% HUM)
+        - Can include both carbon and nitrogen components
+        - Requires RothC soil model to be active (CompF or CompA plot types)
+
+        Note: Switching between true/false has no effect if manure data is zero or missing
+              in both time series AND events. Only affects results when manure data exists.
+
+        Use for: Agricultural systems receiving external organic amendments, municipal biosolids
+                 applications, or compost additions. Common in intensive horticulture or when
+                 modeling nutrient management with imported organic matter.
+
+    rothCVers : str, optional
+        RothC soil carbon model version (default: "Vers263").
+
+        - "Vers263" : RothC Version 2.6.3 (current standard for Australian National Inventory)
+            Features: 5-pool model (DPM, RPM, BIO, HUM, IOM), monthly/finer timesteps,
+            temperature and moisture modifiers, clay content effects.
 
     userSens : bool, optional
         Enable sensitivity analysis mode (default: False).
@@ -288,15 +476,81 @@ def create_config_section(
         When False: Single simulation run.
         Use for: Uncertainty analysis and parameter importance assessment.
 
-    userSoilMnrl : bool, optional
-        Enable user-specified mineral nitrogen pool parameters (default: True).
-        When True: Allows editing of Mnrl section parameters (fertilization, deposition, etc.).
-                   Mnrl section and TimeSeries must exist in PLO file with defined values.
-        When False: Uses only FullCAM default mineral nitrogen parameters (non-editable).
-        Use for: Set True if you want to specify fertilizer inputs, N deposition, or customize
-                 nitrification/denitrification parameters. Independent of userN flag.
-        Note: Can be True while userN="false" - structure exists but N cycling is not simulated.
-              Required True if userEventNFeA or userEventNFeF is True.
+    userOpti : bool, optional
+        Enable optimization mode for parameter fitting (default: False).
+        When True: FullCAM performs automated parameter optimization.
+        When False: Standard simulation mode.
+        Use for: Calibration of model parameters to match observed data.
+
+    userEcon : bool, optional
+        Enable economic analysis module (default: False).
+
+        When True: Calculates net present value (NPV), costs, revenues for the project.
+                   - All economic modeling in constant dollars
+                   - Costs and incomes added to various management events
+                   - Per-hectare costs combined with fixed costs for total project cost
+                   - Requires site area to be specified (cannot be blank)
+
+        When False: No economic calculations (carbon accounting only).
+                    - Carbon and biomass tracking without financial metrics
+
+        **Requirements when True:**
+        - Site must have defined area (see siteArea parameter in Site section)
+        - Forest: userLogGrade must be True (harvests require log grade pricing)
+        - Agriculture: userCropGrade must be True (harvests require crop grade pricing)
+        - All thin/harvest events must specify grades (0% grade still allowed for pruning)
+
+        **Automatic Implications:**
+        Setting userEcon="true" automatically forces:
+        - userLogGrade="true" for forest systems
+        - userCropGrade="true" for agricultural systems
+        (Because only grades include pricing information needed for economics)
+
+        Use for: Financial feasibility analysis, investment decisions, cost-benefit analysis
+                 for forestry or agricultural projects. Essential for commercial plantation
+                 financial modeling and carbon project economics.
+
+    userLogGrade : bool, optional
+        Enable log quality grading for forest products (default: False).
+
+        When True: Forest thinning/harvest must specify products by log grade (quality classes).
+                   - Enables size/quality-dependent pricing and tracking
+                   - Each log grade has associated pricing information (sawlog, pulpwood, etc.)
+                   - Allows detailed product quality tracking over time
+                   - Even with 0% log grade, can still specify material moving to debris (pruning)
+
+        When False: All harvested wood treated uniformly without quality differentiation.
+                    - Single product class for all timber
+                    - No quality-based pricing
+
+        Requirements when True:
+        - Thinning and harvest events must specify log grades (cannot use simple harvest)
+        - Compatible with userEcon="true" for economic analysis
+        - Required when userEcon="true" (economic modeling forces log grades)
+
+        Use for: Commercial forestry operations with quality-dependent markets, sawlog vs
+                 pulpwood differentiation, log grading standards (e.g., A, B, C grades).
+                 Essential for realistic timber economics in plantation forestry.
+
+    userCropGrade : bool, optional
+        Enable crop quality grading/classification (default: False).
+
+        When True: Crop harvests must specify product by grade (quality classes).
+                   - Enables quality-dependent pricing and tracking
+                   - Each crop grade has associated pricing information
+                   - Allows detailed product quality tracking over time
+
+        When False: All crop output treated uniformly without quality differentiation.
+                    - Single product class for all harvested crops
+                    - No quality-based pricing
+
+        Requirements when True:
+        - Harvest events must specify crop grades (cannot use simple harvest)
+        - Compatible with userEcon="true" for economic analysis
+
+        Use for: Agricultural systems with quality-dependent pricing, premium/standard grain
+                 classifications, or when modeling markets with quality premiums.
+                 Common in grain cropping (wheat grades), horticultural products.
 
     Returns
     -------
@@ -358,6 +612,7 @@ def create_timing_section(
         - "1" = Annual timesteps (fastest; long-term forest projections)
         - "12" = Monthly timesteps (most common for carbon accounting; adequate for most purposes)
         - "52" = Weekly timesteps (detailed crop growth)
+        - "110" = ~3.3 day resolution (typical for FullCAM E_globulus simulations)
         - "365" = Daily timesteps (detailed soil moisture/crop modeling)
         - "8760" = Hourly timesteps (research/detailed process studies)
 
@@ -486,7 +741,7 @@ def create_timing_section(
 def create_build_section(
     lonBL: float,
     latBL: float,
-    frCat: str = "All",
+    frCat: str = "null",
     applyDownloadedData: bool = True,
     areaBL: str = "OneKm",
     frFracBL: str = ""
@@ -508,7 +763,7 @@ def create_build_section(
         Negative = Southern hemisphere
 
     frCat : str, optional
-        Forest category controlling species availability and calibrations (default: "All").
+        Forest category controlling species availability and calibrations (default: "null").
 
         IMPORTANT - What Are Calibrations?
         Calibrations are statistically fitted parameters that control how trees grow and allocate
@@ -528,12 +783,13 @@ def create_build_section(
         Example: Using native forest calibrations for commercial eucalyptus plantation
         underestimates biomass by ~30% over the rotation period.
 
-        **For Commercial Eucalyptus globulus → Use "Plantation"**
+        **For Commercial Eucalyptus globulus plantations → Use "Plantation"**
         - Provides hardwood plantation-specific growth calibrations
         - Ensures species list appropriate for commercial forestry
         - Optimized for timber/pulp plantation management scenarios
+        - Essential for accurate carbon accounting in managed eucalyptus systems
 
-        - "All" or "null" : All Categories
+        - "null" or "All" : All Categories (DEFAULT for E_globulus_2024.plo)
             No filtering; all species and data types available.
             Use for: Exploration, research, or when unsure about land type.
             Warning: May provide generic calibrations less accurate than category-specific ones.
@@ -624,8 +880,8 @@ def create_build_section(
 
 
 def create_site_section(
-    count: int,
-    timeseries_list: List[str],
+    count: int = 21,
+    timeseries_content: str = '',
     tAirTemp: str = "Direct",
     tVPD: str = "",
     tSoilTemp: str = "",
@@ -664,9 +920,8 @@ def create_site_section(
     count : int
         Number of time series included. Required parameter.
 
-    timeseries_list : list of str
-        List of TimeSeries XML strings to include. Required parameter.
-        Each element should be a complete TimeSeries XML element.
+    timeseries_content :  str
+        TimeSeries XML strings to include. Required parameter.
 
     tAirTemp : str, optional
         Air temperature input type (default: "Direct").
@@ -814,7 +1069,6 @@ def create_site_section(
                  f'upstreamCRatio="{upstreamCRatio}" '
                  f'fpiAvgLT="{fpiAvgLT}">')
 
-    timeseries_content = "\n".join(timeseries_list)
 
     return f"{site_open}\n{timeseries_content}\n</Site>"
 
@@ -822,7 +1076,7 @@ def create_site_section(
 def create_timeseries(
     tInTS: str,
     rawTS_values: List[float],
-    yr0TS: str = "2010",
+    yr0TS: str = "1970",
     nYrsTS: str = "1",
     dataPerYrTS: str = "12",
     tExtrapTS: str = "AvgYr",
@@ -891,16 +1145,30 @@ def create_timeseries(
         - "conditIrrigF" : Conditional irrigation for forest (%, varies)
             Percentage of soil water capacity guaranteed by irrigation.
             Range: 0-100%. Applied after rainfall and definite irrigation.
+            Only required when <Config/> userEventIrrF="false" AND <Site/> conditIrrigOnF="true".
 
         - "defnitIrrigF" : Definite irrigation for forest (mm, typically monthly)
             Irrigation that definitely occurs regardless of conditions.
             Use for known irrigation schedules; applied before conditional irrigation.
 
+            **IMPORTANT - When is this <TimeSeries/> required?**
+            - REQUIRED when <Config/> userEventIrrF="false" (time series data source)
+            - NOT NEEDED when <Config/> userEventIrrF="true" (event data source)
+            - For "no irrigation" dryland forests: Use event mode (userEventIrrF="true")
+              and omit this <TimeSeries/> entirely, OR use time series mode with all zeros.
+
         - "defnitIrrigA" : Definite irrigation for agriculture (mm, typically monthly)
             Same as defnitIrrigF but for agricultural system.
 
+            **IMPORTANT - When is this <TimeSeries/> required?**
+            - REQUIRED when <Config/> userEventIrrA="false" (time series data source)
+            - NOT NEEDED when <Config/> userEventIrrA="true" (event data source)
+            - For "no irrigation" dryland agriculture: Use event mode (userEventIrrA="true")
+              and omit this <TimeSeries/> entirely, OR use time series mode with all zeros.
+
         - "conditIrrigA" : Conditional irrigation for agriculture (%, varies)
             Same as conditIrrigF but for agricultural system.
+            Only required when <Config/> userEventIrrA="false" AND <Site/> conditIrrigOnA="true".
 
     rawTS_values : list
         List of numeric values or empty strings. Required parameter.
@@ -909,8 +1177,9 @@ def create_timeseries(
         FullCAM automatically interpolates to match simulation timesteps.
 
     yr0TS : str, optional
-        Starting year for the time series (default: "2010").
+        Starting year for the time series (default: "1970").
         Must be a 4-digit year string.
+        E_globulus_2024.plo uses 1970 as baseline for climate data extrapolation.
 
     nYrsTS : str, optional
         Number of years in time series (default: "1").
@@ -990,16 +1259,6 @@ def create_timeseries(
     - Time series data can be downloaded from Data Builder API for Australian locations
     - Manual entry required for non-Australian locations or detailed site data
 
-    Examples
-    --------
-    >>> # Monthly temperature data for 2020
-    >>> temps = [15.68, 17.65, 13.03, 10.66, 5.53, 4.72,
-    ...          2.97, 3.65, 4.72, 9.66, 11.96, 15.80]
-    >>> ts = create_timeseries("avgAirTemp", temps, yr0TS="2020", nYrsTS="1", dataPerYrTS="12")
-
-    >>> # Annual Forest Productivity Index
-    >>> fpi = [8.5, 9.2, 7.8, 10.1, 8.9]
-    >>> ts = create_timeseries("forestProdIx", fpi, yr0TS="2015", nYrsTS="5", dataPerYrTS="1")
     """
     # Convert values list to comma-separated string
     rawTS_str = ",".join(str(v) if v != "" else "" for v in rawTS_values)
@@ -1022,44 +1281,158 @@ def create_timeseries(
 # ============================================================================
 
 if __name__ == "__main__":
-    # Example: Create Meta section
-    meta = create_meta_section("My_Test_Plot_2025", notesME="Example plot for testing")
-    print("Meta Section:")
-    print(meta)
-    print("\n" + "="*80 + "\n")
 
-    # Example: Create Config section
-    config = create_config_section(tPlot="CompF", userMulchF="true")
-    print("Config Section:")
-    print(config)
-    print("\n" + "="*80 + "\n")
+    # ----------------------------------------------------------------------------
+    # Step 1: Create Meta section
+    # ----------------------------------------------------------------------------
+    meta = create_meta_section("My_Plot", notesME="")
+    
 
-    # Example: Create Timing section
-    timing = create_timing_section(stYrYTZ="2020", enYrYTZ="2050")
-    print("Timing Section:")
-    print(timing)
-    print("\n" + "="*80 + "\n")
+    # ----------------------------------------------------------------------------
+    # Step 2: Create Config section
+    # Note: E_globulus_2024.plo uses userEventIrrF=False (irrigation via time series)
+    #       and userEventNFeF=True, userEventNFeA=True (fertilizer via events)
+    # ----------------------------------------------------------------------------
+    config = create_config_section(
+        tPlot="CompF",
+        userSoilMnrl=True,
+        userMulchF=False,
+        userEventIrrF=False,  # Time series-based irrigation (requires defnitIrrigF time series)
+        userEventNFeF=True,   # Event-based nitrogen fertilizer for forest
+        userEventNFeA=True,   # Event-based nitrogen fertilizer for agriculture
+        userN=False
+    )
+    
 
-    # Example: Create Build section
-    build = create_build_section(148.16, -35.61)
-    print("Build Section:")
-    print(build)
-    print("\n" + "="*80 + "\n")
+    # ----------------------------------------------------------------------------
+    # Step 3: Create Timing section
+    # ----------------------------------------------------------------------------
+    timing = create_timing_section(
+        stYrYTZ="2010",
+        enYrYTZ="2100",
+        stepsPerYrYTZ="110",
+        tStepsYTZ="Yearly",
+        stepsPerOutYTZ="1"
+    )
 
-    # Example: Create TimeSeries
+    # ----------------------------------------------------------------------------
+    # Step 4: Create Build section
+    # Note: E_globulus_2024.plo uses coordinates 148.16, -35.61 (Canberra region)
+    # ----------------------------------------------------------------------------
+    build = create_build_section(
+        lonBL=148.16,
+        latBL=-35.61,
+        frCat="null",  # E_globulus_2024.plo uses "null" - change to "Plantation" for commercial forestry
+        applyDownloadedData=True,
+        areaBL="OneKm"
+    )
+
+    # ----------------------------------------------------------------------------
+    # Step 5: Create Site section with time series matching E_globulus_2024.plo
+    # ----------------------------------------------------------------------------
+    # E_globulus_2024.plo includes these time series:
+    #   - avgAirTemp (monthly average air temperature) - 54 years from 1970
+    #   - openPanEvap (monthly open-pan evaporation) - 54 years from 1970
+    #   - forestProdIx (annual forest productivity index) - 53 years from 1970
+    #   - rainfall (monthly total rainfall) - calculated from climate data
+    #   - defnitIrrigF (definite irrigation - forest) - 12 zeros (no irrigation)
+    #   - conditIrrigF (conditional irrigation - forest) - 12 zeros (no irrigation)
+    #   - defnitIrrigA (definite irrigation - agriculture) - 12 zeros
+    #   - conditIrrigA (conditional irrigation - agriculture) - 12 zeros
+    #
+    # IMPORTANT: Since userEventIrrF=False in Config, we MUST include
+    # defnitIrrigF and conditIrrigF time series even if all zeros (no irrigation).
+    # This is a requirement when using time series data source for irrigation.
+    # ----------------------------------------------------------------------------
+
+    # 5-1: Average air temperature (12 monthly values for 1 year, 1970 baseline)
     temps = [15.68, 17.65, 13.03, 10.66, 5.53, 4.72,
              2.97, 3.65, 4.72, 9.66, 11.96, 15.80]
-    ts1 = create_timeseries("avgAirTemp", temps, yr0TS="2020", nYrsTS="1")
-    print("TimeSeries Section:")
-    print(ts1)
-    print("\n" + "="*80 + "\n")
+    ts_temp = create_timeseries(
+        tInTS="avgAirTemp",
+        rawTS_values=temps,
+        yr0TS="1970",
+        nYrsTS="1",
+        dataPerYrTS="12"
+    )
 
-    # Example: Create Site section with TimeSeries
+    # 5-2: Open pan evaporation (12 monthly values for 1 year, 1970 baseline)
+    evap = [185.38, 182.03, 146.66, 81.78, 46.14, 33.41,
+            38.86, 49.45, 62.64, 113.40, 157.43, 213.62]
+    ts_evap = create_timeseries(
+        tInTS="openPanEvap",
+        rawTS_values=evap,
+        yr0TS="1970",
+        nYrsTS="1",
+        dataPerYrTS="12"
+    )
+
+    # 5-3: Forest Productivity Index (1 annual value for 1 year, 1970 baseline)
+    fpi = [9.52]
+    ts_fpi = create_timeseries(
+        tInTS="forestProdIx",
+        rawTS_values=fpi,
+        yr0TS="1970",
+        nYrsTS="1",
+        dataPerYrTS="1"
+    )
+
+    # 5-4: Rainfall (12 monthly values for 1 year)
     rainfall = [172.91, 42.76, 91.18, 213.70, 130.61, 157.46,
                 119.02, 309.44, 264.66, 115.63, 194.56, 89.46]
-    ts2 = create_timeseries("rainfall", rainfall, yr0TS="2020", nYrsTS="1")
+    ts_rain = create_timeseries(
+        tInTS="rainfall",
+        rawTS_values=rainfall,
+        yr0TS="1970",
+        nYrsTS="1",
+        dataPerYrTS="12"
+    )
 
-    site = create_site_section(2, [ts1, ts2], maxAbgMF="979.24",
-                              fpiAvgLT="8.85")
-    print("Site Section (with TimeSeries):")
-    print(site)
+    # 5-5: Definite irrigation for forest (12 zeros - no irrigation)
+    # REQUIRED when userEventIrrF=False (time series mode)
+    irrig_f = [0.0] * 12
+    ts_irrig_f = create_timeseries(
+        tInTS="defnitIrrigF",
+        rawTS_values=irrig_f,
+        yr0TS="2010",  # E_globulus uses 2010 for irrigation time series
+        nYrsTS="1",
+        dataPerYrTS="12"
+    )
+
+    # 5-6: Conditional irrigation for forest (12 zeros - no irrigation)
+    cond_irrig_f = [0.0] * 12
+    ts_cond_irrig_f = create_timeseries(
+        tInTS="conditIrrigF",
+        rawTS_values=cond_irrig_f,
+        yr0TS="2010",
+        nYrsTS="1",
+        dataPerYrTS="12"
+    )
+
+    # Assemble Site section with all time series
+    timeseries_content = [ts_temp, ts_evap, ts_fpi, ts_rain, ts_irrig_f, ts_cond_irrig_f]
+    site = create_site_section(
+        count=len(timeseries_content),
+        timeseries_content=timeseries_content,
+        tAirTemp="Direct",
+        conditIrrigOnF=False,
+        maxAbgMF="0",  # Should be extracted from 'maxAbgMF' in the siteinfo xml
+        fpiAvgLT="0"   # Should be calculated from 'forestProdIx' using the first 48 elements (1970-2017)
+    )
+
+    # ----------------------------------------------------------------------------
+    # FINAL ASSEMBLY:
+    # To create a complete PLO file, wrap these sections in:
+    #
+    # <?xml version="1.0" encoding="UTF-8"?>
+    # <DocumentPlot version="5009">
+    #   [Meta section]
+    #   [Config section]
+    #   [Timing section]
+    #   [Build section]
+    #   [Site section]
+    # </DocumentPlot>
+    #
+    # Note: SpeciesForestSet and RegimeSet sections can be added after Site
+    # for species definitions and management events (thinning, harvest, etc.)
+    # ----------------------------------------------------------------------------

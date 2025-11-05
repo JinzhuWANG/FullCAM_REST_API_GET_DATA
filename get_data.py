@@ -1,12 +1,9 @@
 import os,time,re
 import requests
-import pandas as pd
 import rioxarray as rio
 import xarray as xr
 import numpy as np
 
-from lxml import etree
-from io import StringIO
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 
@@ -37,8 +34,9 @@ Aus_cell_RES5_df = Aus_cell_RES5.to_dataframe(name='cell_idx').reset_index()[['y
 
 
 scrap_coords = lon_lat\
-    .loc[lon_lat['cell_idx'].isin(Aus_cell_RES5_df['cell_idx'])]\
-    .query('mask == True')
+    .query('mask == True')\
+    .loc[lon_lat['cell_idx'].isin(Aus_cell_RES5_df['cell_idx'])]
+    
 
 
 
@@ -98,10 +96,12 @@ tasks = [delayed(get_siteinfo)(lat, lon)
          for lat, lon in tqdm(zip(scrap_coords_siteinfo['y'], scrap_coords_siteinfo['x']), total=len(scrap_coords_siteinfo))
 ]
 
-for rtn in tqdm(Parallel(n_jobs=20,  backend='threading', return_as='generator_unordered')(tasks), total=len(tasks)):
+for rtn in tqdm(Parallel(n_jobs=35,  backend='threading', return_as='generator_unordered')(tasks), total=len(tasks)):
     if rtn is not None:
         print(rtn)
     
+
+
 
 # ----------------------- Species --------------------------
 def get_species(lat, lon, try_number=8):
@@ -141,10 +141,13 @@ tasks = [delayed(get_species)(lat, lon)
             for lat, lon in tqdm(zip(scrap_coords_species['y'], scrap_coords_species['x']), total=len(scrap_coords_species))
         ]
 
-for rtn in tqdm(Parallel(n_jobs=20,  backend='threading', return_as='generator_unordered')(tasks), total=len(tasks)):
+for rtn in tqdm(Parallel(n_jobs=35,  backend='threading', return_as='generator_unordered')(tasks), total=len(tasks)):
     if rtn is not None:
         print(rtn)
 
+    
+    
+    
     
 # # ----------------------- Regimes --------------------------
 # ENDPOINT = "/2024/data-builder/regimes"
@@ -204,19 +207,6 @@ for rtn in tqdm(Parallel(n_jobs=20,  backend='threading', return_as='generator_u
 # with open('data/updated_plotfile_response.xml', 'wb') as f:
 #     f.write(response.content)
 
-
-
-
-# ----------------------- Plot simulation --------------------------
-BASE_URL_SIM = "https://api.climatechange.gov.au/climate/carbon-accounting/2024/plot/v1"
-ENDPOINT = "/2024/fullcam-simulator/run-plotsimulation"
-url = f"{BASE_URL_SIM}{ENDPOINT}"
-
-with open("data/E_globulus_2024.plo", 'rb') as file:
-    file_data = file.read()
-
-response = requests.post(url, files={'file': ('test.plo', file_data)}, headers={"Ocp-Apim-Subscription-Key": API_KEY},  timeout=30)
-response_df = pd.read_csv(StringIO(response.text))
 
 
 

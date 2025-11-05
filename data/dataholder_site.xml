@@ -1,0 +1,69 @@
+<TimeSeries tInTS="defnitIrrigA" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+    <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+    <rawTS count="12">0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0</rawTS>
+</TimeSeries>
+<TimeSeries tInTS="conditIrrigA" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+    <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+    <rawTS count="12">0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0</rawTS>
+</TimeSeries>
+<TimeSeries tInTS="soilTemp" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+    <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+    <rawTS count="12">,,,,,,,,,,,</rawTS>
+</TimeSeries>
+<TimeSeries tInTS="APAR" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+    <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+    <rawTS count="12">,,,,,,,,,,,</rawTS>
+</TimeSeries>
+<TimeSeries tInTS="modNutrTS" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+    <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+    <rawTS count="12">,,,,,,,,,,,</rawTS>
+</TimeSeries>
+<TimeSeries tInTS="modASWTS" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+    <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+    <rawTS count="12">,,,,,,,,,,,</rawTS>
+</TimeSeries>
+<TimeSeries tInTS="modVPDTS" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+    <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+    <rawTS count="12">,,,,,,,,,,,</rawTS>
+</TimeSeries>
+<TimeSeries tInTS="eqmEvap" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+    <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+    <rawTS count="12">,,,,,,,,,,,</rawTS>
+</TimeSeries>
+<TimeSeries tInTS="fertility" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+    <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+    <rawTS count="12">,,,,,,,,,,,</rawTS>
+</TimeSeries>
+<TimeSeries tInTS="conditIrrigF" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+    <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+    <rawTS count="12">0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0</rawTS>
+</TimeSeries>
+<TimeSeries tInTS="defnitIrrigF" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+    <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+    <rawTS count="12">0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0</rawTS>
+</TimeSeries>
+<TimeSeries tInTS="solarRad" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+    <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+    <rawTS count="12">,,,,,,,,,,,</rawTS>
+</TimeSeries>
+<TimeSeries tInTS="frostNights" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+    <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+    <rawTS count="12">,,,,,,,,,,,</rawTS>
+</TimeSeries>
+<TimeSeries tInTS="rangeAirTemp" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+    <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+    <rawTS count="12">,,,,,,,,,,,</rawTS>
+</TimeSeries>
+<TimeSeries tInTS="minAirTemp" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+    <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+    <rawTS count="12">,,,,,,,,,,,</rawTS>
+</TimeSeries>
+<TimeSeries tInTS="VPD" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+    <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+    <rawTS count="12">,,,,,,,,,,,</rawTS>
+</TimeSeries>
+
+<TimeSeries tInTS="modFrostTS" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+    <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+    <rawTS count="12">,,,,,,,,,,,</rawTS>
+</TimeSeries>
