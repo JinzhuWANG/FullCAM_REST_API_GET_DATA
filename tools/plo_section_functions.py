@@ -3,7 +3,8 @@ FullCAM PLO File Section Functions
 Modular functions for creating individual sections of PLO files.
 Each function generates XML for a specific section with proper Python docstrings.
 """
-
+import os
+from lxml import etree
 from typing import List
 
 # ============================================================================
@@ -880,6 +881,8 @@ def create_build_section(
 
 
 def create_site_section(
+    lon: float = None,
+    lat: float = None,
     count: int = 21,
     timeseries_content: str = '',
     tAirTemp: str = "Direct",
@@ -912,16 +915,24 @@ def create_site_section(
     """
     Create Site section for PLO file with site parameters and time series.
 
-    The Site section is a container for site-level parameters and multiple
-    time series datasets for climate, productivity, and management.
-
     Parameters
     ----------
-    count : int
-        Number of time series included. Required parameter.
+    lon : float, optional
+        Longitude for API data loading. If provided with lat, loads site data
+        from 'downloaded/siteInfo_{lon}_{lat}.xml' and auto-populates time series,
+        fpiAvgLT, and maxAbgMF parameters (default: None).
 
-    timeseries_content :  str
-        TimeSeries XML strings to include. Required parameter.
+    lat : float, optional
+        Latitude for API data loading. Must be provided with lon for API mode
+        (default: None).
+
+    count : int, optional
+        Number of time series included (default: 21).
+        Automatically determined in API mode.
+
+    timeseries_content : str, optional
+        TimeSeries XML strings to include (default: '').
+        Automatically loaded from API in API mode.
 
     tAirTemp : str, optional
         Air temperature input type (default: "Direct").
@@ -1022,6 +1033,7 @@ def create_site_section(
 
     maxAbgMF : str, optional
         Maximum aboveground biomass for forest in Mg/ha (default: "").
+        Automatically calculated from API data in API mode.
 
     maxAbgMA : str, optional
         Maximum aboveground biomass for agriculture (default: "").
@@ -1040,11 +1052,64 @@ def create_site_section(
 
     fpiAvgLT : str, optional
         Average Forest Productivity Index (default: "").
+        Automatically calculated from API data in API mode (1970-2017 average).
 
     Returns
     -------
+    str
         XML string for complete Site section including all TimeSeries.
+    
     """
+    
+
+    # API Data Mode: Load from downloaded files
+    file_path = f'downloaded/siteInfo_{lon}_{lat}.xml'
+
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(
+            f"Required file '{file_path}' not found! "
+            f"Run get_data.py to download site data for coordinates ({lat}, {lon})."
+        )
+
+    # Parse DATA-API response to get TimeSeries data
+    site_root = etree.parse(file_path).getroot()
+
+    api_avgAirTemp = site_root.xpath('.//*[@tInTS="avgAirTemp"]')[0]
+    api_openPanEvap = site_root.xpath('.//*[@tInTS="openPanEvap"]')[0]
+    api_rainfall = site_root.xpath('.//*[@tInTS="rainfall"]')[0]
+    api_forestProdIx = site_root.xpath('.//*[@tInTS="forestProdIx"]')[0]
+
+    fpi_values = [float(i) for i in site_root.xpath('.//*[@tInTS="forestProdIx"]//rawTS')[0].text.split(',')]
+    fpiAvgLT = str(sum(fpi_values[:48]) / 48)       # fpiAvgLT from first 48 elements (1970-2017)
+    maxAbgMF = site_root.xpath('.//*[@tIn="maxAbgMF"]')[0].get('value')
+
+    # Parse the dataholder template, to be populated with the API TimeSeries data
+    holder_root = etree.parse('data/dataholder_site.xml').getroot()
+
+    timeseries_replacements = {
+        "avgAirTemp": api_avgAirTemp,
+        "openPanEvap": api_openPanEvap,
+        "rainfall": api_rainfall,
+        "forestProdIx": api_forestProdIx
+    }
+
+    for ts_type, api_element in timeseries_replacements.items():
+        holder_element = holder_root.xpath(f'.//*[@tInTS="{ts_type}"]')[0]
+        parent = holder_element.getparent()
+        index = list(parent).index(holder_element)
+        parent.remove(holder_element)
+        parent.insert(index, api_element)
+
+    # Generate TimeSeries content
+    timeseries_elements = holder_root.findall('.//TimeSeries')
+    timeseries_content = ''.join(
+        etree.tostring(ts, encoding='unicode', pretty_print=True).replace('\n    ', '')
+        for ts in timeseries_elements
+    )
+
+    count = len(timeseries_elements)
+
+    # Build Site XML
     site_open = (f'<Site count="{count}" tAirTemp="{tAirTemp}" '
                  f'tVPD="{tVPD}" tSoilTemp="{tSoilTemp}" '
                  f'hasArea="{_bool_to_xml(hasArea)}" userHasArea="{_bool_to_xml(userHasArea)}" '
@@ -1069,370 +1134,20 @@ def create_site_section(
                  f'upstreamCRatio="{upstreamCRatio}" '
                  f'fpiAvgLT="{fpiAvgLT}">')
 
-
     return f"{site_open}\n{timeseries_content}\n</Site>"
 
 
-def create_timeseries(
-    tInTS: str,
-    rawTS_values: List[float],
-    yr0TS: str = "1970",
-    nYrsTS: str = "1",
-    dataPerYrTS: str = "12",
-    tExtrapTS: str = "AvgYr",
-    tOriginTS: str = "Calendar",
-    nDecPlacesTS: str = "1",
-    colWidthTS: str = "50",
-    multTS: str = "1.0",
-    showGraphTS: bool = True,
-    winstate_L: str = "10",
-    winstate_T: str = "120",
-    winstate_clientW: str = "702",
-    winstate_clientH: str = "450",
-    winstate_ws: str = "Normal"
-) -> str:
-    """
-    Create TimeSeries element for climate, productivity, or management data.
-
-    TimeSeries elements contain temporal data such as temperature, rainfall,
-    irrigation, or other time-varying parameters. Each time series type affects
-    specific model components (RothC for soil, CAMFor/CAMAg for biomass, 3PG for productivity).
-
-    Parameters
-    ----------
-    tInTS : str
-        Time series input type. Required parameter.
-
-        **Climate/Environmental Types:**
-
-        - "avgAirTemp" : Average air temperature (°C, typically monthly)
-            Used by RothC, CAMFor, and CAMAg for soil decomposition and tree growth.
-            Valid range: -50°C to 50°C for Australia.
-
-        - "rainfall" : Total rainfall/precipitation (mm, typically monthly)
-            Required by RothC for topsoil moisture deficit calculation.
-            100 mm = 1 megalitre per hectare. Range: 0 to ~2000 mm/month.
-
-        - "openPanEvap" : Open-pan evaporation (mm, typically monthly)
-            RothC uses this to calculate evapotranspiration and topsoil moisture deficit.
-            Evapotranspiration = openPanEvap x ratio (typically 0.75).
-
-        - "VPD" : Vapour Pressure Deficit (kPa, typically monthly)
-            Used by 3PG-lite for tree productivity; affects transpiration and growth.
-            Range: 0 to ~5 kPa (arid regions can exceed 3 kPa).
-
-        - "soilTemp" : Soil temperature (°C, typically monthly)
-            Affects decomposition rates in RothC; influences nutrient cycling.
-            Often derived from air temperature if direct measurements unavailable.
-
-        - "solarRad" : Mean daily solar radiation (MJ/m², typically monthly)
-            Used by 3PG-lite for photosynthesis and growth calculations.
-            Range: ~5 to 35 MJ/m²/day depending on latitude and season.
-
-        - "fertility" : Soil fertility modifier (dimensionless, monthly or annual)
-            Time-varying modifier for soil nutrient availability.
-            Range: >0, typically 0.5 to 1.5. Values >1 indicate enhanced fertility.
-
-        **Productivity Types:**
-
-        - "forestProdIx" : Forest Productivity Index (dimensionless, annual)
-            Annual forest productivity combining soil, sunlight, rainfall, evaporation, and frost.
-            Range: 0 to ~20 (higher = more productive). Used by Tree Yield Formula (TYF).
-            Growth multiplier = FPIt / FPIave. Described in NCAS Technical Report No.27.
-
-        **Irrigation Types:**
-
-        - "conditIrrigF" : Conditional irrigation for forest (%, varies)
-            Percentage of soil water capacity guaranteed by irrigation.
-            Range: 0-100%. Applied after rainfall and definite irrigation.
-            Only required when <Config/> userEventIrrF="false" AND <Site/> conditIrrigOnF="true".
-
-        - "defnitIrrigF" : Definite irrigation for forest (mm, typically monthly)
-            Irrigation that definitely occurs regardless of conditions.
-            Use for known irrigation schedules; applied before conditional irrigation.
-
-            **IMPORTANT - When is this <TimeSeries/> required?**
-            - REQUIRED when <Config/> userEventIrrF="false" (time series data source)
-            - NOT NEEDED when <Config/> userEventIrrF="true" (event data source)
-            - For "no irrigation" dryland forests: Use event mode (userEventIrrF="true")
-              and omit this <TimeSeries/> entirely, OR use time series mode with all zeros.
-
-        - "defnitIrrigA" : Definite irrigation for agriculture (mm, typically monthly)
-            Same as defnitIrrigF but for agricultural system.
-
-            **IMPORTANT - When is this <TimeSeries/> required?**
-            - REQUIRED when <Config/> userEventIrrA="false" (time series data source)
-            - NOT NEEDED when <Config/> userEventIrrA="true" (event data source)
-            - For "no irrigation" dryland agriculture: Use event mode (userEventIrrA="true")
-              and omit this <TimeSeries/> entirely, OR use time series mode with all zeros.
-
-        - "conditIrrigA" : Conditional irrigation for agriculture (%, varies)
-            Same as conditIrrigF but for agricultural system.
-            Only required when <Config/> userEventIrrA="false" AND <Site/> conditIrrigOnA="true".
-
-    rawTS_values : list
-        List of numeric values or empty strings. Required parameter.
-        Total count must equal nYrsTS x dataPerYrTS.
-        Use empty string "" for missing data (e.g., [1.5, "", 2.3]).
-        FullCAM automatically interpolates to match simulation timesteps.
-
-    yr0TS : str, optional
-        Starting year for the time series (default: "1970").
-        Must be a 4-digit year string.
-        E_globulus_2024.plo uses 1970 as baseline for climate data extrapolation.
-
-    nYrsTS : str, optional
-        Number of years in time series (default: "1").
-        Must satisfy: len(rawTS_values) == int(nYrsTS) x int(dataPerYrTS).
-
-    dataPerYrTS : str, optional
-        Data points per year (default: "12").
-        - "12" = Monthly data (most common for climate)
-        - "1" = Annual data (common for forestProdIx)
-        - "52" = Weekly data
-        - "365" = Daily data
-
-    tExtrapTS : str, optional
-        Extrapolation method for years outside data range (default: "AvgYr").
-
-        - "AvgYr" : Uses nearest available year (first year before data, last year after data).
-            Most common for climate data.
-
-        - "CycYr" : Cycles through available years repeatedly.
-            Maintains year-to-year variability pattern.
-
-        - "HotYr" : Uses warmest year from dataset repeatedly.
-            For climate sensitivity analysis.
-
-        - "WetYr" : Uses wettest year from dataset repeatedly.
-            For wet year scenario analysis.
-
-        - "DryYr" : Uses driest year from dataset repeatedly.
-            For drought scenario analysis.
-
-    tOriginTS : str, optional
-        Time reference system (default: "Calendar").
-        - "Calendar" = Calendar year (Jan-Dec)
-        - "Water" = Water year (varies by region, e.g., Jul-Jun)
-
-    nDecPlacesTS : str, optional
-        Number of decimal places for data precision (default: "1").
-        Affects display and output formatting.
-
-    colWidthTS : str, optional
-        Column width for UI display in pixels (default: "50").
-
-    multTS : str, optional
-        Multiplier applied to all values (default: "1.0").
-        Useful for unit conversions or scaling adjustments.
-
-    showGraphTS : bool, optional
-        Whether to display graph in FullCAM UI (default: True).
-
-    winstate_L : str, optional
-        Window left position in pixels for UI (default: "10").
-
-    winstate_T : str, optional
-        Window top position in pixels for UI (default: "120").
-
-    winstate_clientW : str, optional
-        Window client width in pixels for UI (default: "702").
-
-    winstate_clientH : str, optional
-        Window client height in pixels for UI (default: "450").
-
-    winstate_ws : str, optional
-        Window state for UI (default: "Normal").
-        Values: "Normal", "Minimized", "Maximized".
-
-    Returns
-    -------
-    str
-        XML string for TimeSeries element formatted for FullCAM PLO file.
-
-    Notes
-    -----
-    - All temperature units in Celsius (°C)
-    - All water/precipitation units in millimeters (mm)
-    - All radiation units in MJ/m²
-    - All pressure units in kPa
-    - Time series data can be downloaded from Data Builder API for Australian locations
-    - Manual entry required for non-Australian locations or detailed site data
-
-    """
-    # Convert values list to comma-separated string
-    rawTS_str = ",".join(str(v) if v != "" else "" for v in rawTS_values)
-    count = len(rawTS_values)
-
-    return (f'<TimeSeries tInTS="{tInTS}" tExtrapTS="{tExtrapTS}" '
-            f'tOriginTS="{tOriginTS}" yr0TS="{yr0TS}" nYrsTS="{nYrsTS}" '
-            f'dataPerYrTS="{dataPerYrTS}" nDecPlacesTS="{nDecPlacesTS}" '
-            f'colWidthTS="{colWidthTS}" multTS="{multTS}" '
-            f'showGraphTS="{_bool_to_xml(showGraphTS)}">\n'
-            f'<WinState L="{winstate_L}" T="{winstate_T}" '
-            f'clientW="{winstate_clientW}" clientH="{winstate_clientH}" '
-            f'ws="{winstate_ws}"/>\n'
-            f'<rawTS count="{count}">{rawTS_str}</rawTS>\n'
-            f'</TimeSeries>')
+def create_species_section(lon: float, lat: float) -> str:
+    file_path = f'downloaded/species_{lon}_{lat}.xml'
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(
+            f"Required file '{file_path}' not found! "
+            f"Run get_data.py to download species data for coordinates ({lat}, {lon})."
+        )
+    species_root = etree.parse(file_path).getroot().findall('SpeciesForest')
+    if len(species_root) != 1:
+        raise ValueError(f"Expected one SpeciesForest element in {file_path}, found {len(species_root)}")
+    species = etree.tostring(species_root[0], encoding='unicode', pretty_print=True).replace('\n', '')
+    return f'<SpeciesForestSet count="{len(species_root)}" showOnlyInUse="false">{species}</SpeciesForestSet>'
 
 
-# ============================================================================
-# USAGE EXAMPLES
-# ============================================================================
-
-if __name__ == "__main__":
-
-    # ----------------------------------------------------------------------------
-    # Step 1: Create Meta section
-    # ----------------------------------------------------------------------------
-    meta = create_meta_section("My_Plot", notesME="")
-    
-
-    # ----------------------------------------------------------------------------
-    # Step 2: Create Config section
-    # Note: E_globulus_2024.plo uses userEventIrrF=False (irrigation via time series)
-    #       and userEventNFeF=True, userEventNFeA=True (fertilizer via events)
-    # ----------------------------------------------------------------------------
-    config = create_config_section(
-        tPlot="CompF",
-        userSoilMnrl=True,
-        userMulchF=False,
-        userEventIrrF=False,  # Time series-based irrigation (requires defnitIrrigF time series)
-        userEventNFeF=True,   # Event-based nitrogen fertilizer for forest
-        userEventNFeA=True,   # Event-based nitrogen fertilizer for agriculture
-        userN=False
-    )
-    
-
-    # ----------------------------------------------------------------------------
-    # Step 3: Create Timing section
-    # ----------------------------------------------------------------------------
-    timing = create_timing_section(
-        stYrYTZ="2010",
-        enYrYTZ="2100",
-        stepsPerYrYTZ="110",
-        tStepsYTZ="Yearly",
-        stepsPerOutYTZ="1"
-    )
-
-    # ----------------------------------------------------------------------------
-    # Step 4: Create Build section
-    # Note: E_globulus_2024.plo uses coordinates 148.16, -35.61 (Canberra region)
-    # ----------------------------------------------------------------------------
-    build = create_build_section(
-        lonBL=148.16,
-        latBL=-35.61,
-        frCat="null",  # E_globulus_2024.plo uses "null" - change to "Plantation" for commercial forestry
-        applyDownloadedData=True,
-        areaBL="OneKm"
-    )
-
-    # ----------------------------------------------------------------------------
-    # Step 5: Create Site section with time series matching E_globulus_2024.plo
-    # ----------------------------------------------------------------------------
-    # E_globulus_2024.plo includes these time series:
-    #   - avgAirTemp (monthly average air temperature) - 54 years from 1970
-    #   - openPanEvap (monthly open-pan evaporation) - 54 years from 1970
-    #   - forestProdIx (annual forest productivity index) - 53 years from 1970
-    #   - rainfall (monthly total rainfall) - calculated from climate data
-    #   - defnitIrrigF (definite irrigation - forest) - 12 zeros (no irrigation)
-    #   - conditIrrigF (conditional irrigation - forest) - 12 zeros (no irrigation)
-    #   - defnitIrrigA (definite irrigation - agriculture) - 12 zeros
-    #   - conditIrrigA (conditional irrigation - agriculture) - 12 zeros
-    #
-    # IMPORTANT: Since userEventIrrF=False in Config, we MUST include
-    # defnitIrrigF and conditIrrigF time series even if all zeros (no irrigation).
-    # This is a requirement when using time series data source for irrigation.
-    # ----------------------------------------------------------------------------
-
-    # 5-1: Average air temperature (12 monthly values for 1 year, 1970 baseline)
-    temps = [15.68, 17.65, 13.03, 10.66, 5.53, 4.72,
-             2.97, 3.65, 4.72, 9.66, 11.96, 15.80]
-    ts_temp = create_timeseries(
-        tInTS="avgAirTemp",
-        rawTS_values=temps,
-        yr0TS="1970",
-        nYrsTS="1",
-        dataPerYrTS="12"
-    )
-
-    # 5-2: Open pan evaporation (12 monthly values for 1 year, 1970 baseline)
-    evap = [185.38, 182.03, 146.66, 81.78, 46.14, 33.41,
-            38.86, 49.45, 62.64, 113.40, 157.43, 213.62]
-    ts_evap = create_timeseries(
-        tInTS="openPanEvap",
-        rawTS_values=evap,
-        yr0TS="1970",
-        nYrsTS="1",
-        dataPerYrTS="12"
-    )
-
-    # 5-3: Forest Productivity Index (1 annual value for 1 year, 1970 baseline)
-    fpi = [9.52]
-    ts_fpi = create_timeseries(
-        tInTS="forestProdIx",
-        rawTS_values=fpi,
-        yr0TS="1970",
-        nYrsTS="1",
-        dataPerYrTS="1"
-    )
-
-    # 5-4: Rainfall (12 monthly values for 1 year)
-    rainfall = [172.91, 42.76, 91.18, 213.70, 130.61, 157.46,
-                119.02, 309.44, 264.66, 115.63, 194.56, 89.46]
-    ts_rain = create_timeseries(
-        tInTS="rainfall",
-        rawTS_values=rainfall,
-        yr0TS="1970",
-        nYrsTS="1",
-        dataPerYrTS="12"
-    )
-
-    # 5-5: Definite irrigation for forest (12 zeros - no irrigation)
-    # REQUIRED when userEventIrrF=False (time series mode)
-    irrig_f = [0.0] * 12
-    ts_irrig_f = create_timeseries(
-        tInTS="defnitIrrigF",
-        rawTS_values=irrig_f,
-        yr0TS="2010",  # E_globulus uses 2010 for irrigation time series
-        nYrsTS="1",
-        dataPerYrTS="12"
-    )
-
-    # 5-6: Conditional irrigation for forest (12 zeros - no irrigation)
-    cond_irrig_f = [0.0] * 12
-    ts_cond_irrig_f = create_timeseries(
-        tInTS="conditIrrigF",
-        rawTS_values=cond_irrig_f,
-        yr0TS="2010",
-        nYrsTS="1",
-        dataPerYrTS="12"
-    )
-
-    # Assemble Site section with all time series
-    timeseries_content = [ts_temp, ts_evap, ts_fpi, ts_rain, ts_irrig_f, ts_cond_irrig_f]
-    site = create_site_section(
-        count=len(timeseries_content),
-        timeseries_content=timeseries_content,
-        tAirTemp="Direct",
-        conditIrrigOnF=False,
-        maxAbgMF="0",  # Should be extracted from 'maxAbgMF' in the siteinfo xml
-        fpiAvgLT="0"   # Should be calculated from 'forestProdIx' using the first 48 elements (1970-2017)
-    )
-
-    # ----------------------------------------------------------------------------
-    # FINAL ASSEMBLY:
-    # To create a complete PLO file, wrap these sections in:
-    #
-    # <?xml version="1.0" encoding="UTF-8"?>
-    # <DocumentPlot version="5009">
-    #   [Meta section]
-    #   [Config section]
-    #   [Timing section]
-    #   [Build section]
-    #   [Site section]
-    # </DocumentPlot>
-    #
-    # Note: SpeciesForestSet and RegimeSet sections can be added after Site
-    # for species definitions and management events (thinning, harvest, etc.)
-    # ----------------------------------------------------------------------------

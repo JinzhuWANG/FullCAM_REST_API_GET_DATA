@@ -10,6 +10,7 @@ from tools.plo_section_functions import (
     create_config_section,
     create_meta_section,
     create_site_section,
+    create_species_section,
     create_timing_section
 )
 
@@ -29,48 +30,27 @@ HEADERS = {
 
 
 # ----------------------- Assemble PLO files --------------------------
+lon, lat = 148.16, -35.61
 
 
-
-# 1) meta
+# 1) --------------- meta  --------------- 
 meta = create_meta_section("My_Plot", notesME="")
 
-# 2) config
+# 2) --------------- config --------------- 
 config = create_config_section()
 
-# 3) timing
+# 3) --------------- timing --------------- 
 timing = create_timing_section()
 
-# 4) build
-build = create_build_section(148.16, -35.61)
+# 4) --------------- build --------------- 
+build = create_build_section(lon, lat)
 
-# 5) site
-site_root = etree.parse('data/siteinfo_response.xml').getroot()
+# 5) --------------- site --------------- 
+site = create_site_section(lon, lat)
 
-site_avgAirTemp = etree.tostring(site_root.xpath('.//*[@tInTS="avgAirTemp"]')[0]).decode('utf-8')
-site_openPanEvap = etree.tostring(site_root.xpath('.//*[@tInTS="openPanEvap"]')[0]).decode('utf-8')
-site_rainfall = etree.tostring(site_root.xpath('.//*[@tInTS="rainfall"]')[0]).decode('utf-8')
-site_forestProdIx = etree.tostring(site_root.xpath('.//*[@tInTS="forestProdIx"]')[0]).decode('utf-8')
-
-site_fpiAvgLT = [float(i) for i in site_root.xpath('.//*[@tInTS="forestProdIx"]//rawTS')[0].text.split(',')]
-site_fpiAvgLT = sum(site_fpiAvgLT[:48]) / 48    # Should be calculated from the first 48 elements (1970-2017)
-
-with open('data/dataholder_site.xml', 'rb') as f_holder:
-    element_holder = f_holder.read().decode('utf-8').replace('\n', '')
-    
-site_content = element_holder + ''.join([
-        site_avgAirTemp,
-        site_openPanEvap,
-        site_rainfall,
-        site_forestProdIx
-    ])
-
-siteinfo = create_site_section(21, site_content)
-    
-with open('PLO_files/dataholder_forest.xml', 'w') as f_plo:
-    f_plo.write(siteinfo)
-    
-
+# 6) --------------- species --------------- 
+species_forest = create_species_section(lon, lat)
+species_ag = '<SpeciesAgricultureSet count="0" showOnlyInUse="false"/>'
     
 
 
@@ -84,6 +64,10 @@ with open('PLO_files/dataholder_forest.xml', 'w') as f_plo:
 # ----------------------- Plot simulation --------------------------
 
 url = f"{BASE_URL_SIM}{ENDPOINT}"
+
+# Parse PLO file
+PLO_xml = etree.parse("data/E_globulus_2024.plo").getroot()
+
 
 with open("data/E_globulus_2024.plo", 'rb') as file:
     file_data = file.read()

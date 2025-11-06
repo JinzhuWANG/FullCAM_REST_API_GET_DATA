@@ -54,9 +54,6 @@ scrap_coords_siteinfo = scrap_coords[~scrap_coords.set_index(['y', 'x']).index.i
 scrap_coords_species = scrap_coords[~scrap_coords.set_index(['y', 'x']).index.isin(existing_species)].reset_index(drop=True)
 
 
-
-
-
 # ----------------------- SiteInfo --------------------------
 def get_siteinfo(lat, lon, try_number=8):
     PARAMS = {
