@@ -1,3 +1,4 @@
 .claude/settings.local.json
 __pycache__/
 downloaded/
+data/plot_simulation_response.csv
