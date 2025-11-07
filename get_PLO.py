@@ -31,7 +31,7 @@ HEADERS = {
 
 
 # ----------------------- Plot simulation --------------------------
-lon, lat = 146.03, -37.75
+lon, lat = 148.16, -35.61
 url = f"{BASE_URL_SIM}{ENDPOINT}"
 raw_str = assemble_plo_sections(lon, lat, 2010)
 
