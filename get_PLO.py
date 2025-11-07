@@ -8,13 +8,14 @@ from tools.plo_section_functions import assemble_plo_sections
 
 
 # Configuration
-'''
-If having issues with API access, try running below snippet to temporarily adding key to current session:
+#   If having issues with API access, try running below snippet to temporarily adding key to current session:
+#   WARNING: Do not hardcode API keys in production code!
 
+'''
 import os
 os.environ["FULLCAM_API_KEY"] = "your_api_key_here"
-
 '''
+
 API_KEY = os.getenv("FULLCAM_API_KEY")
 if not API_KEY: raise ValueError("`FULLCAM_API_KEY`environment variable not set!")
 
