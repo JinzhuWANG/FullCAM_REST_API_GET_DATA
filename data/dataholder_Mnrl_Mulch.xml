@@ -1,0 +1,50 @@
+<Mnrl>
+    <MnrlZap id="forest" depoSlope="" depoOffset="" nfixSlope="" nfixOffset="" nitrK1="0.2" nitrK2="0.02" nitrKMax="0.1" nitrTemp_a="1.0" nitrTemp_b="25.0" nitrTemp_c="5.5" nitrPH_a="1.0" nitrPH_b="4.749" nitrPH_c="0.756" nitrWater_aL="2.0" nitrWater_aH="5.5" nitrWater_aX="0.7" nitrWater_bL="4.2" nitrWater_bH="9.3" nitrWater_bX="0.7" nitrWater_cL="6.0" nitrWater_cH="11.0" nitrWater_cX="0.7" deniMax="0.024" deniNRMax="25.0" deniCO2_a="1.0" deniCO2_b="0.015" deniCO2_c="0.003" deniNO3_a="1.0" deniNO3_b="0.085" deniNO3_c="0.022" deniWater_a="1.0" deniWater_b="0.8" deniWater_c="0.065" deniRCO2_a="1.0" deniRCO2_b="0.0125" deniRCO2_c="0.0038" deniRNO3_a="1.0" deniRNO3_b="0.0763" deniRNO3_c="0.0133" deniRWater_a="1.0" deniRWater_b="0.65" deniRWater_c="0.075" useTSDeni="false" fracMnrlNToDeepLeac="" tLeachingN="LeachN_NCyc" proRataNRationing="true" bondOn="false" bondEmitLo="" bondEmitMed="" bondEmitHi="" bondMnrlNM="" bondSoilTemp="" bondSpread="">
+        <rationNArr type="RationT">RationDeni,RationSdcm,RationNita,RationMdcm,RationProd,RationAbsn,RationSoen,RationBond</rationNArr>
+        <fracBiteArr>0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5</fracBiteArr>
+    </MnrlZap>
+    <MnrlZap id="ag" depoSlope="" depoOffset="" nfixSlope="" nfixOffset="" nitrK1="0.2" nitrK2="0.02" nitrKMax="0.1" nitrTemp_a="1.0" nitrTemp_b="25.0" nitrTemp_c="5.5" nitrPH_a="1.0" nitrPH_b="4.749" nitrPH_c="0.756" nitrWater_aL="2.0" nitrWater_aH="5.5" nitrWater_aX="0.7" nitrWater_bL="4.2" nitrWater_bH="9.3" nitrWater_bX="0.7" nitrWater_cL="6.0" nitrWater_cH="11.0" nitrWater_cX="0.7" deniMax="0.024" deniNRMax="25.0" deniCO2_a="1.0" deniCO2_b="0.015" deniCO2_c="0.003" deniNO3_a="1.0" deniNO3_b="0.085" deniNO3_c="0.022" deniWater_a="1.0" deniWater_b="0.8" deniWater_c="0.065" deniRCO2_a="1.0" deniRCO2_b="0.0125" deniRCO2_c="0.0038" deniRNO3_a="1.0" deniRNO3_b="0.0763" deniRNO3_c="0.0133" deniRWater_a="1.0" deniRWater_b="0.65" deniRWater_c="0.075" useTSDeni="false" fracMnrlNToDeepLeac="" tLeachingN="LeachN_NCyc" proRataNRationing="true" bondOn="false" bondEmitLo="" bondEmitMed="" bondEmitHi="" bondMnrlNM="" bondSoilTemp="" bondSpread="">
+        <rationNArr type="RationT">RationDeni,RationSdcm,RationNita,RationMdcm,RationProd,RationAbsn,RationSoen,RationBond</rationNArr>
+        <fracBiteArr>0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5</fracBiteArr>
+    </MnrlZap>
+    <TimeSeries tInTS="mnrlNMFromOffsF" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+        <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+        <rawTS count="12">0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0</rawTS>
+    </TimeSeries>
+    <TimeSeries tInTS="mnrlNMFromOffsA" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+        <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+        <rawTS count="12">0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0</rawTS>
+    </TimeSeries>
+    <TimeSeries tInTS="mnrlNMToAtmsDeniF" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+        <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+        <rawTS count="12">,,,,,,,,,,,</rawTS>
+    </TimeSeries>
+    <TimeSeries tInTS="mnrlNMToAtmsDeniA" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+        <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+        <rawTS count="12">,,,,,,,,,,,</rawTS>
+    </TimeSeries>
+    <TimeSeries tInTS="mnrlNMToAtmsLeacF" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+        <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+        <rawTS count="12">,,,,,,,,,,,</rawTS>
+    </TimeSeries>
+    <TimeSeries tInTS="mnrlNMToAtmsLeacA" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+        <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+        <rawTS count="12">,,,,,,,,,,,</rawTS>
+    </TimeSeries>
+</Mnrl>
+<Mulch>
+    <MulchZap id="forest" fracMdcmToMicr="" fracMicrCMIsWall="" fracWallCMIsLr="" turnFracMicr="" fracMdcmMicrExcr="" micrNCRatio="" sommNCRatio="" lrmmNCRatio="" mrmmNCRatio="" mrpmNCRatio="" lrpmNCRatio="" maxMicrNCRatio="" minMicrNCRatio="" mdcmFracSopm="" mdcmFracLrpm="" mdcmFracMrpm="" mdcmFracSomm="" mdcmFracLrmm="" mdcmFracMrmm="" mdcmSensTemp="" mdcmSensRain="" humfFracSopm="" humfFracLrpm="" humfFracMrpm="" humfFracSomm="" humfFracLrmm="" humfFracMrmm="" humfFracMicr=""/>
+    <MulchZap id="ag" fracMdcmToMicr="" fracMicrCMIsWall="" fracWallCMIsLr="" turnFracMicr="" fracMdcmMicrExcr="" micrNCRatio="" sommNCRatio="" lrmmNCRatio="" mrmmNCRatio="" mrpmNCRatio="" lrpmNCRatio="" maxMicrNCRatio="" minMicrNCRatio="" mdcmFracSopm="" mdcmFracLrpm="" mdcmFracMrpm="" mdcmFracSomm="" mdcmFracLrmm="" mdcmFracMrmm="" mdcmSensTemp="" mdcmSensRain="" humfFracSopm="" humfFracLrpm="" humfFracMrpm="" humfFracSomm="" humfFracLrmm="" humfFracMrmm="" humfFracMicr=""/>
+    <TimeSeries tInTS="sopmCMInput" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+        <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+        <rawTS count="12">,,,,,,,,,,,</rawTS>
+    </TimeSeries>
+    <TimeSeries tInTS="lrpmCMInput" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+        <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+        <rawTS count="12">,,,,,,,,,,,</rawTS>
+    </TimeSeries>
+    <TimeSeries tInTS="mrpmCMInput" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+        <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+        <rawTS count="12">,,,,,,,,,,,</rawTS>
+    </TimeSeries>
+</Mulch>

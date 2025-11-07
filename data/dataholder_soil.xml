@@ -1,0 +1,21 @@
+<Soil>
+    <SoilBase>
+        <!-- Data should be replaced during assembling PLO file -->
+    </SoilBase>
+    <TimeSeries tInTS="soilCover" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="1" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+        <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+        <rawTS count="1">0.6</rawTS>
+    </TimeSeries>
+    <TimeSeries tInTS="presCMInput" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+        <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+        <rawTS count="10">,,,,,,,,,</rawTS>
+    </TimeSeries>
+    <TimeSeries tInTS="manuCMFromOffsF" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+        <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+        <rawTS count="10">0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0</rawTS>
+    </TimeSeries>
+    <TimeSeries tInTS="manuCMFromOffsA" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="12" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
+        <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>
+        <rawTS count="10">0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0</rawTS>
+    </TimeSeries>
+</Soil>

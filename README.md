@@ -17,8 +17,10 @@ Python toolkit for interacting with the FullCAM (Full Carbon Accounting Model) R
 
 **Install dependencies:**
 ```bash
-pip install requests lxml pandas
+pip install requests lxml pandas rioxarray xarray numpy joblib tqdm
 ```
+
+*Note: `scandir_rs` is only needed for the `copy_files.py` utility script.*
 
 **Set up API key:**
 
@@ -40,117 +42,118 @@ If not set, add it to your user environment variables (Windows) or export it in 
 
 ### Basic Usage
 
-**1. Fetch site data from API:**
+**Workflow: Download data → Generate PLO → Run simulation**
+
+**Step 1: Download API data (one-time setup):**
 
 ```python
-import requests
-from lxml import etree
-import os
+# Run the bulk download script to cache data for Australian locations
+# This downloads siteInfo and species data for thousands of coordinates
+# WARNING: This is a long-running script (hours to days depending on network)
 
-# Configuration (reads from environment variable)
-API_KEY = os.getenv("FULLCAM_API_KEY")
-BASE_URL = "https://api.dcceew.gov.au/climate/carbon-accounting/2024/data/v1"
-
-# Get climate and soil data for a location
-response = requests.get(
-    f"{BASE_URL}/2024/data-builder/siteinfo",
-    params={
-        "latitude": -35.61,
-        "longitude": 148.16,
-        "area": "OneKm",
-        "plotT": "CompF"
-    },
-    headers={"Ocp-Apim-Subscription-Key": API_KEY}
-)
-
-# Parse response
-root = etree.fromstring(response.content)
-print(f"Site data retrieved: {response.status_code}")
+python get_data.py
 ```
 
-**2. Generate a PLO file:**
+This script:
+- Uses LUTO land use raster to identify valid Australian coordinates
+- Downloads `siteInfo_{lon}_{lat}.xml` (climate, soil, FPI) for each location
+- Downloads `species_{lon}_{lat}.xml` (Eucalyptus globulus parameters)
+- Saves to `downloaded/` directory
+- Skips already-downloaded files
+- Uses 35 concurrent threads with exponential backoff retry logic
+
+**Step 2: Generate PLO file from cached data:**
 
 ```python
-from plo_section_functions import (
-    create_meta_section,
-    create_build_section,
-    create_config_section,
-    create_timing_section,
-    create_site_section
-)
+from tools.plo_section_functions import assemble_plo_sections
 
-# Create sections
-meta = create_meta_section("My_Plot", notesME="Test plot for forest carbon")
-config = create_config_section(tPlot="CompF")
-build = create_build_section(lonBL=148.16, latBL=-35.61, frCat="Plantation")
-timing = create_timing_section(stYrYTZ="2000", enYrYTZ="2050")
-site = create_site_section(0, [])  # Empty site for now
+# Specify coordinates and start year
+lon, lat = 148.16, -35.61  # Canberra region
+year_start = 2010
 
-# Assemble and save
-plo_content = f'''<?xml version="1.0" encoding="UTF-8"?>
-<DocumentPlot version="5009">
-{meta}
-{config}
-{timing}
-{build}
-{site}
-</DocumentPlot>'''
+# Generate complete PLO file (loads from downloaded/ directory)
+plo_xml = assemble_plo_sections(lon, lat, year_start)
 
+# Optional: Save to file
 with open("my_plot.plo", "w", encoding="utf-8") as f:
-    f.write(plo_content)
+    f.write(plo_xml)
+
+print("PLO file generated successfully!")
 ```
 
-**3. Run a simulation:**
+This automatically:
+- Loads climate time series from `downloaded/siteInfo_{lon}_{lat}.xml`
+- Loads species parameters from `downloaded/species_{lon}_{lat}.xml`
+- Merges with templates from `data/dataholder_*.xml` files
+- Returns complete, simulation-ready PLO XML string
+
+**Step 3: Run simulation and get results:**
 
 ```python
 import requests
+import pandas as pd
+from io import StringIO
 import os
 
-# Configuration (reads from environment variable)
+# Configuration
 API_KEY = os.getenv("FULLCAM_API_KEY")
 SIMULATOR_URL = "https://api.climatechange.gov.au/climate/carbon-accounting/2024/plot/v1"
 
-# Submit PLO file and get results
-with open("my_plot.plo", "rb") as f:
-    files = {"file": ("my_plot.plo", f, "application/octet-stream")}
-    response = requests.post(
-        f"{SIMULATOR_URL}/2024/fullcam-simulator/run-plotsimulation",
-        files=files,
-        headers={"Ocp-Apim-Subscription-Key": API_KEY}
-    )
+# Submit PLO file to FullCAM Simulator
+response = requests.post(
+    f"{SIMULATOR_URL}/2024/fullcam-simulator/run-plotsimulation",
+    files={'file': ('plot.plo', plo_xml)},
+    headers={"Ocp-Apim-Subscription-Key": API_KEY},
+    timeout=30
+)
 
-# Get CSV results
-results_csv = response.text
-print(results_csv)
+# Parse CSV results into DataFrame
+results_df = pd.read_csv(StringIO(response.text))
+
+# Save results
+results_df.to_csv('simulation_results.csv', index=False)
+
+# Display carbon stocks over time
+print(results_df[['Year', 'TotalC_tCha']].head())
 ```
+
+**Complete workflow script:** See [get_PLO.py](get_PLO.py) for a working example that combines all steps.
 
 ## Project Structure
 
 ```
 .
-├── get_data.py                    # API client (fetch data, run simulations)
-├── plo_section_functions.py       # Modular PLO section builders
-├── README.md                      # User documentation (this file)
-├── CLAUDE.md                      # Developer guide for Claude Code
-├── .gitignore                     # Git ignore patterns
-├── data/                          # Cached API responses and examples
-│   ├── siteinfo_response.xml      # Site climate and soil data
-│   ├── species_response.xml       # Species information
-│   ├── regimes_response.xml       # Management regime data
-│   ├── templates_response.xml     # List of available templates
-│   ├── E_globulus_2024.plo        # Example Eucalyptus plot
-│   └── ...
-└── tools/                         # Documentation and utilities
-    ├── FullCAM_Documentation_Complete.html
-    └── get_fullcam_help.py
+├── get_data.py                                 # Bulk API data download (Australian coordinates)
+├── get_PLO.py                                  # PLO generation and simulation workflow
+├── README.md                                   # User documentation (this file)
+├── CLAUDE.md                                   # Developer guide for Claude Code
+├── .gitignore                                  # Git ignore patterns
+├── data/                                       # Template XML files and example data
+│   ├── dataholder_*.xml                        # XML templates for PLO sections (8 files)
+│   ├── E_globulus_2024.plo                     # Example Eucalyptus plot
+│   ├── plot_simulation_response.csv            # Example simulation results
+│   ├── lumap.tif                               # LUTO land use raster (coordinate source)
+│   ├── siteinfo_response.xml                   # Example API response (site info)
+│   ├── species_response.xml                    # Example API response (species)
+│   └── single_template_response.xml            # Example API response (template)
+├── downloaded/                                 # Cached API responses (thousands of files)
+│   ├── siteInfo_{lon}_{lat}.xml                # Climate, soil, FPI data per location
+│   └── species_{lon}_{lat}.xml                 # Species parameters per location
+└── tools/                                      # PLO generation library and utilities
+    ├── plo_section_functions.py                # Complete PLO file generation module
+    ├── copy_files.py                           # Utility to copy downloaded files between directories
+    ├── FullCAM_Documentation_Complete.html     # Official FullCAM docs
+    └── get_fullcam_help.py                     # Documentation helper script
 ```
 
 ### Module Responsibilities
 
 | Module | Purpose |
 |--------|---------|
-| [get_data.py](get_data.py) | API interactions, data fetching, simulation submission |
-| [plo_section_functions.py](plo_section_functions.py) | Individual PLO section generators with type-safe parameters |
+| [get_data.py](get_data.py) | Bulk download of API data for all Australian locations (one-time setup) |
+| [get_PLO.py](get_PLO.py) | Example workflow: generate PLO → run simulation → save results |
+| [tools/plo_section_functions.py](tools/plo_section_functions.py) | Complete PLO file generation from cached data |
+| [tools/copy_files.py](tools/copy_files.py) | Utility to copy downloaded files between directories (parallel processing) |
 
 ## PLO File Structure
 
@@ -238,108 +241,92 @@ Climate and productivity data used in PLO files:
 
 ## Examples
 
-### Example 1: Create PLO from API Data
+### Example 1: Generate Single PLO File
 
 ```python
-from lxml import etree
-import requests
-import os
-from plo_section_functions import (
-    create_meta_section,
-    create_build_section,
-    create_config_section,
-    create_timing_section,
-    create_timeseries,
-    create_site_section
-)
+from tools.plo_section_functions import assemble_plo_sections
 
-# 1. Fetch site data
-API_KEY = os.getenv("FULLCAM_API_KEY")
-BASE_URL = "https://api.dcceew.gov.au/climate/carbon-accounting/2024/data/v1"
+# Generate PLO for a specific location using cached data
+lon, lat = 148.16, -35.61  # Canberra region
+year_start = 2010
 
-response = requests.get(
-    f"{BASE_URL}/2024/data-builder/siteinfo",
-    params={"latitude": -35.61, "longitude": 148.16, "area": "OneKm", "plotT": "CompF"},
-    headers={"Ocp-Apim-Subscription-Key": API_KEY}
-)
-root = etree.fromstring(response.content)
+# This automatically loads data from:
+# - downloaded/siteInfo_148.16_-35.61.xml
+# - downloaded/species_148.16_-35.61.xml
+# - data/dataholder_*.xml templates
+plo_xml = assemble_plo_sections(lon, lat, year_start)
 
-# 2. Extract time series
-ts_list = []
-for ts_elem in root.findall('.//TimeSeries'):
-    ts_type = ts_elem.get('tInTS')
-    raw_data = ts_elem.find('rawTS').text
-    ts_list.append(create_timeseries(
-        tInTS=ts_type,
-        rawTS_values=raw_data,
-        yr0TS=ts_elem.get('yr0TS'),
-        nYrsTS=ts_elem.get('nYrsTS'),
-        dataPerYrTS=ts_elem.get('dataPerYrTS')
-    ))
+# Save to file
+with open("canberra_plot.plo", "w", encoding="utf-8") as f:
+    f.write(plo_xml)
 
-# 3. Build PLO sections
-meta = create_meta_section("API_Generated_Plot")
-config = create_config_section(tPlot="CompF")
-timing = create_timing_section(stYrYTZ="2020", enYrYTZ="2050")
-build = create_build_section(148.16, -35.61)
-site = create_site_section(len(ts_list), ts_list)
-
-# 4. Assemble and save
-plo_content = f'''<?xml version="1.0" encoding="UTF-8"?>
-<DocumentPlot version="5009">
-{meta}
-{config}
-{timing}
-{build}
-{site}
-</DocumentPlot>'''
-
-with open("api_plot.plo", "w", encoding="utf-8") as f:
-    f.write(plo_content)
+print("PLO file generated successfully!")
 ```
 
-### Example 2: Batch Processing Locations
+### Example 2: Batch Process Multiple Locations
 
 ```python
 import pandas as pd
-from plo_section_functions import (
-    create_meta_section,
-    create_build_section,
-    create_config_section,
-    create_timing_section,
-    create_site_section
-)
+from tools.plo_section_functions import assemble_plo_sections
 
-# Load locations
+# Load locations from CSV or define manually
 locations = pd.DataFrame({
     'name': ['Plot_A', 'Plot_B', 'Plot_C'],
     'lat': [-35.61, -36.12, -34.89],
     'lon': [148.16, 149.23, 147.45]
 })
 
-# Generate PLO files
+# Generate PLO files for all locations
 for idx, row in locations.iterrows():
-    # Create sections
-    meta = create_meta_section(row['name'])
-    config = create_config_section(tPlot="CompF")
-    timing = create_timing_section(stYrYTZ="2020", enYrYTZ="2050")
-    build = create_build_section(row['lon'], row['lat'])
-    site = create_site_section(0, [])  # Empty site
+    try:
+        # Generate PLO from cached data
+        plo_xml = assemble_plo_sections(
+            lon=row['lon'],
+            lat=row['lat'],
+            year_start=2010
+        )
 
-    # Assemble PLO
-    plo_content = f'''<?xml version="1.0" encoding="UTF-8"?>
-<DocumentPlot version="5009">
-{meta}
-{config}
-{timing}
-{build}
-{site}
-</DocumentPlot>'''
+        # Save to file
+        filename = f"{row['name']}.plo"
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(plo_xml)
 
-    # Save to file
-    with open(f"{row['name']}.plo", "w", encoding="utf-8") as f:
-        f.write(plo_content)
-    print(f"Created {row['name']}.plo")
+        print(f"Created {filename}")
+
+    except FileNotFoundError as e:
+        print(f"Skipping {row['name']}: {e}")
+```
+
+### Example 3: Generate PLO and Run Simulation
+
+```python
+import requests
+import pandas as pd
+from io import StringIO
+import os
+from tools.plo_section_functions import assemble_plo_sections
+
+# Configuration
+API_KEY = os.getenv("FULLCAM_API_KEY")
+SIMULATOR_URL = "https://api.climatechange.gov.au/climate/carbon-accounting/2024/plot/v1"
+
+# Generate PLO file
+lon, lat = 148.16, -35.61
+plo_xml = assemble_plo_sections(lon, lat, year_start=2010)
+
+# Submit to simulator
+response = requests.post(
+    f"{SIMULATOR_URL}/2024/fullcam-simulator/run-plotsimulation",
+    files={'file': ('plot.plo', plo_xml)},
+    headers={"Ocp-Apim-Subscription-Key": API_KEY},
+    timeout=30
+)
+
+# Parse and save results
+results_df = pd.read_csv(StringIO(response.text))
+results_df.to_csv(f'results_{lon}_{lat}.csv', index=False)
+
+print(f"Simulation complete. Total carbon at year 2100: {results_df.iloc[-1]['TotalC_tCha']:.2f} tC/ha")
 ```
 
 ## Documentation
@@ -359,38 +346,87 @@ See [CLAUDE.md](CLAUDE.md) for architecture details, design patterns, and implem
 
 ## Function Reference
 
+### Primary Function (Recommended Entry Point)
+
+**`assemble_plo_sections(lon, lat, year_start=2010)`**
+
+Generates a complete, simulation-ready PLO file from cached API data.
+
+**Parameters:**
+- `lon` (float): Longitude in decimal degrees
+- `lat` (float): Latitude in decimal degrees
+- `year_start` (int, optional): Simulation start year (default: 2010)
+
+**Returns:** Complete PLO XML string ready for submission to FullCAM Simulator
+
+**Data Requirements:**
+- `downloaded/siteInfo_{lon}_{lat}.xml` must exist (run `get_data.py` first)
+- `downloaded/species_{lon}_{lat}.xml` must exist (run `get_data.py` first)
+- `data/dataholder_*.xml` template files must exist (included in repository)
+
+**Example:**
+```python
+from tools.plo_section_functions import assemble_plo_sections
+
+plo_xml = assemble_plo_sections(148.16, -35.61, year_start=2010)
+```
+
 ### Section Creation Functions
 
-All functions in [plo_section_functions.py](plo_section_functions.py):
+Individual section functions in [tools/plo_section_functions.py](tools/plo_section_functions.py):
 
-| Function | Required Params | Purpose |
-|----------|----------------|---------|
-| `create_meta_section()` | `nmME` | Plot metadata and notes |
-| `create_config_section()` | None | Simulation configuration |
-| `create_timing_section()` | None | Start/end years, time steps |
-| `create_build_section()` | `lonBL`, `latBL` | Geographic location |
-| `create_site_section()` | `count`, `timeseries_list` | Site data with time series |
-| `create_timeseries()` | `tInTS`, `rawTS_values` | Individual time series |
+| Function | Parameters | Data Source | Purpose |
+|----------|-----------|-------------|---------|
+| `create_meta_section()` | `nmME` (plot name, optional) | Manual | Plot metadata and notes |
+| `create_config_section()` | All optional | Defaults | Simulation configuration flags |
+| `create_timing_section()` | All optional | Defaults | Start/end years, timesteps |
+| `create_build_section()` | `lonBL`, `latBL` (required) | Manual | Geographic location |
+| `create_site_section()` | `lon`, `lat` (required) | `downloaded/siteInfo_*.xml` | Site data with time series |
+| `create_species_section()` | `lon`, `lat` (required) | `downloaded/species_*.xml` | Species parameters |
+| `create_soil_section()` | `lon`, `lat`, `yr0TS` | `downloaded/siteInfo_*.xml` | Soil carbon pools |
+| `create_init_section()` | `lon`, `lat`, `tsmd_year` | `downloaded/siteInfo_*.xml` | Initial carbon values |
+| `create_event_section()` | None | `data/dataholder_event_block.xml` | Management events |
+| `create_outwinset_section()` | None | `data/dataholder_OutWinSet.xml` | GUI settings |
+| `create_logentryset_section()` | None | `data/dataholder_logentryset.xml` | Audit log |
+| `create_mnrl_mulch_section()` | None | `data/dataholder_Mnrl_Mulch.xml` | Nitrogen cycling |
+| `create_other_info_section()` | None | `data/dataholder_other_info.xml` | Economic/sensitivity |
 
-### API Data Script
+**Note:** These functions are called internally by `assemble_plo_sections()`. You typically don't need to call them directly unless customizing specific sections.
 
-[get_data.py](get_data.py) is a standalone script (not a module with functions) that fetches data from the FullCAM API:
+### Data Download Scripts
 
-**What it does:**
-- Fetches site information (climate, soil data) for specified coordinates
-- Downloads species information for a specific species ID
-- Retrieves management regime data
-- Gets list of available PLO templates
-- Downloads a specific template file
-- Converts plot files to updated format
-- Saves all responses to the `data/` directory as XML files
+**`get_data.py`** - Bulk API data download for Australian locations
+
+Fetches and caches site information and species data for thousands of coordinates:
+
+- Identifies valid coordinates from LUTO land use raster (`data/lumap.tif`)
+- Downloads `siteInfo_{lon}_{lat}.xml` (climate, soil, FPI) for each location
+- Downloads `species_{lon}_{lat}.xml` (Eucalyptus globulus parameters)
+- Uses 35 concurrent threads with exponential backoff retry logic
+- Skips already-downloaded files
+- Saves to `downloaded/` directory
 
 **Usage:**
 ```bash
 python get_data.py
 ```
 
-Modify the parameters in the script (latitude, longitude, species ID, etc.) before running.
+**Warning:** This is a long-running script (hours to days) for large-scale spatial modeling.
+
+**`get_PLO.py`** - Complete workflow example
+
+Demonstrates PLO generation and simulation:
+
+- Calls `assemble_plo_sections()` to generate PLO from cached data
+- Submits PLO to FullCAM Simulator API
+- Saves results to `data/plot_simulation_response.csv`
+
+**Usage:**
+```bash
+python get_PLO.py
+```
+
+Edit the `lon`, `lat`, and `year_start` variables in the script to change location.
 
 ## Troubleshooting
 

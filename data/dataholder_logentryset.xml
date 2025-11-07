@@ -1,0 +1,213 @@
+<LogEntrySet count="33">
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="ConfigChangeOldNew" timeStampLE="1759965359">
+        <givenArgs count="4">
+            <s id="0">Type of plot</s>
+            <s id="1">tPlot</s>
+            <s id="2"/>
+            <s id="3">Forest system</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1759966854">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="FormatStr" timeStampLE="1759966882">
+        <givenArgs count="3">
+            <s id="0">Client received a %s species: '%s'</s>
+            <s id="1">Tree</s>
+            <s id="2">Native Species Regeneration &lt;500mm rainfall</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1759966904">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="FormatStr" timeStampLE="1759966933">
+        <givenArgs count="3">
+            <s id="0">Client received a %s species: '%s'</s>
+            <s id="1">Tree</s>
+            <s id="2">Eucalyptus globulus</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1759966997">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1759967005">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="FormatStr" timeStampLE="1759967014">
+        <givenArgs count="3">
+            <s id="0">Client received a %s species: '%s'</s>
+            <s id="1">Tree</s>
+            <s id="2">Environmental plantings</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1759967030">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1759967035">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1759967044">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="FormatStr" timeStampLE="1759967060">
+        <givenArgs count="3">
+            <s id="0">Client received a %s species: '%s'</s>
+            <s id="1">Tree</s>
+            <s id="2">Native Species Regeneration &gt;=500mm rainfall</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1759967079">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="DocSave" timeStampLE="1759969701">
+        <givenArgs count="3">
+            <s id="0">Plot</s>
+            <s id="1">Eglob/Collection/new_plot.plo</s>
+            <s id="2">FullCAM UI Version: 2.5.1</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1759971112">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="FormatStr" timeStampLE="1759971145">
+        <givenArgs count="3">
+            <s id="0">Client received a %s species: '%s'</s>
+            <s id="1">Tree</s>
+            <s id="2">Environmental plantings</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="DocSave" timeStampLE="1759971290">
+        <givenArgs count="3">
+            <s id="0">Plot</s>
+            <s id="1">Eglob/Collection/new_plot.plo</s>
+            <s id="2">FullCAM UI Version: 2.5.1</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1759976463">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1759976476">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1759976489">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1759976494">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="DocSave" timeStampLE="1759976513">
+        <givenArgs count="3">
+            <s id="0">Plot</s>
+            <s id="1">Eglob/Collection/new_plot.plo</s>
+            <s id="2">FullCAM UI Version: 2.5.1</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1760325083">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="DocSave" timeStampLE="1760325116">
+        <givenArgs count="3">
+            <s id="0">Plot</s>
+            <s id="1">Eglob/Collection/new_plot.plo</s>
+            <s id="2">FullCAM UI Version: 2.5.1</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1760325466">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1760325482">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1760325499">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1760325507">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1760325511">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1760325526">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="SpaUsingLocn" timeStampLE="1760325684">
+        <givenArgs count="2">
+            <s id="0">-35.61</s>
+            <s id="1">148.16</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="DocSave" timeStampLE="1760325801">
+        <givenArgs count="3">
+            <s id="0">Plot</s>
+            <s id="1">Eglob/Collection/new_plot.plo</s>
+            <s id="2">FullCAM UI Version: 2.5.1</s>
+        </givenArgs>
+    </LogEntry>
+    <LogEntry classLE="Info" levelLE="1" tMsgLE="DocSave" timeStampLE="1760330129">
+        <givenArgs count="3">
+            <s id="0">Plot</s>
+            <s id="1">Eglob/Collection/new_plot.plo</s>
+            <s id="2">FullCAM UI Version: 2.5.1</s>
+        </givenArgs>
+    </LogEntry>
+</LogEntrySet>

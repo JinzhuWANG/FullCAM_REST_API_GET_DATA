@@ -5,7 +5,6 @@ Each function generates XML for a specific section with proper Python docstrings
 """
 import os
 from lxml import etree
-from typing import List
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -1095,10 +1094,7 @@ def create_site_section(
 
     for ts_type, api_element in timeseries_replacements.items():
         holder_element = holder_root.xpath(f'.//*[@tInTS="{ts_type}"]')[0]
-        parent = holder_element.getparent()
-        index = list(parent).index(holder_element)
-        parent.remove(holder_element)
-        parent.insert(index, api_element)
+        holder_element.getparent().replace(holder_element, api_element)
 
     # Generate TimeSeries content
     timeseries_elements = holder_root.findall('.//TimeSeries')
@@ -1148,6 +1144,459 @@ def create_species_section(lon: float, lat: float) -> str:
     if len(species_root) != 1:
         raise ValueError(f"Expected one SpeciesForest element in {file_path}, found {len(species_root)}")
     species = etree.tostring(species_root[0], encoding='unicode', pretty_print=True).replace('\n', '')
-    return f'<SpeciesForestSet count="{len(species_root)}" showOnlyInUse="false">{species}</SpeciesForestSet>'
+    return (
+        f'<SpeciesForestSet count="{len(species_root)}" showOnlyInUse="false">{species}</SpeciesForestSet>'
+        f'<SpeciesAgricultureSet count="0" showOnlyInUse="false"/>'
+    )
 
+
+def create_soil_section(lon:float, lat:float, yr0TS=2010):
+    '''
+    Create the Soil section of the PLO file by replacing the SoilBase and soilCover TimeSeries
+    with site-specific data downloaded from the FULLCAM API.
+    Parameters:
+        lon (float): Longitude of the site.
+        lat (float): Latitude of the site.
+        yr0TS (int): The starting year for the TimeSeries data. Default is 2010.
+        
+    Returns:
+        str: The Soil section as an XML string.
+    '''
+    
+    holder_soil = etree.parse("data/dataholder_soil.xml").getroot()
+    yr0TS = 2010  # Default year
+
+    # Replace SoilBase in holder_soil with site-specific soil data
+    file_path = f'downloaded/SiteInfo_{lon}_{lat}.xml'
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(
+            f"Required file '{file_path}' not found! "
+            f"Run get_data.py to download species data for coordinates ({lat}, {lon})."
+        )
+        
+    site_root = etree.parse(file_path).getroot()
+
+    # SoilBase replacement
+    soil_base = site_root.xpath('.//SoilBase')[0]
+    holder_soil.replace(holder_soil.xpath('.//SoilBase')[0], soil_base)
+
+    # soilCover TimeSeries replacement
+    soil_cover_ts = site_root.xpath('.//LocnSoil')[0].get('soilCoverA') # Note the 'A' suffix
+    holder_soil.xpath('.//*[@tInTS="soilCover"]')[0].find('rawTS').text = soil_cover_ts
+
+    # Set the yr0TS attribute
+    attr_to_set = ['soilCover', 'presCMInput', 'manuCMFromOffsF', 'manuCMFromOffsA']
+    for att in attr_to_set:
+        att_element = holder_soil.xpath(f'.//*[@tInTS="{att}"]')[0]
+        att_element.set('yr0TS', str(yr0TS))  
+        
+    return etree.tostring(holder_soil, encoding='unicode')
+
+
+def create_init_section(lon: float, lat: float, tsmd_year: int = 2010):
+    '''
+    Create the Init section of the PLO file by reading siteinfo data and calculating
+    soil carbon pool values, then updating dataholder_init.xml with these values.
+
+    Parameters:
+        lon (float): Longitude of the site.
+        lat (float): Latitude of the site.
+        tsmd_year (int): Year to use for TSMD initial value (default: 2010).
+                        Must be between 1970 and the last year available in the data.
+
+    Returns:
+        str: The Init section as an XML string with updated soil carbon values.
+    '''
+
+    # Load the dataholder_init.xml template
+    holder_init = etree.parse("data/dataholder_init.xml").getroot()
+
+    # Construct the siteinfo file path
+    file_path = f'downloaded/siteInfo_{lon}_{lat}.xml'
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(
+            f"Required file '{file_path}' not found! "
+            f"Run get_data.py to download site data for coordinates ({lat}, {lon})."
+        )
+
+    # Parse the siteinfo XML
+    site_root = etree.parse(file_path).getroot()
+
+    # Extract LocnSoil attributes
+    locn_soil = site_root.xpath('.//LocnSoil')[0]
+    initFracBiof = float(locn_soil.get('initFracBiof'))
+    initFracBios = float(locn_soil.get('initFracBios'))
+    initFracDpma = float(locn_soil.get('initFracDpma'))
+    initFracRpma = float(locn_soil.get('initFracRpma'))
+    initFracHums = float(locn_soil.get('initFracHums'))
+    initFracInrt = float(locn_soil.get('initFracInrt'))
+    initTotalC = float(locn_soil.get('initTotalC'))
+
+    # Calculate soil carbon pool values (tonnes C/ha)
+    dpmaCMInitF = initFracDpma * initTotalC
+    rpmaCMInitF = initFracRpma * initTotalC
+    biofCMInitF = initFracBiof * initTotalC
+    biosCMInitF = initFracBios * initTotalC
+    humsCMInitF = initFracHums * initTotalC
+    inrtCMInitF = initFracInrt * initTotalC
+
+    # Extract TSMD time series and get value for specified year
+    tsmd_elem = site_root.xpath(".//TimeSeries[@tInTS='initTSMD']")[0]
+    yr0TS = int(tsmd_elem.get('yr0TS'))  # Start year (e.g., 1970)
+    nYrsTS = int(tsmd_elem.get('nYrsTS'))  # Number of years
+
+    # Parse TSMD values
+    rawTS = tsmd_elem.find('rawTS').text
+    tsmd_values = [float(x) for x in rawTS.split(',')]
+
+    # Calculate index for the requested year
+    tsmd_index = tsmd_year - yr0TS
+    TSMDInitF = tsmd_values[tsmd_index]
+    TSMDInitA = TSMDInitF  # Same value for agriculture
+
+    # Update InitSoilF element
+    init_soil_f = holder_init.xpath('.//InitSoilF')[0]
+    init_soil_f.set('dpmaCMInitF', str(dpmaCMInitF))
+    init_soil_f.set('rpmaCMInitF', str(rpmaCMInitF))
+    init_soil_f.set('biofCMInitF', str(biofCMInitF))
+    init_soil_f.set('biosCMInitF', str(biosCMInitF))
+    init_soil_f.set('humsCMInitF', str(humsCMInitF))
+    init_soil_f.set('inrtCMInitF', str(inrtCMInitF))
+    init_soil_f.set('TSMDInitF', str(TSMDInitF))
+
+    # Update InitSoilA element (only TSMD, soil carbon stays empty for agriculture)
+    init_soil_a = holder_init.xpath('.//InitSoilA')[0]
+    init_soil_a.set('TSMDInitA', str(TSMDInitA))
+
+    # Return the updated Init section as XML string
+    return etree.tostring(holder_init, encoding='unicode')
+
+
+def create_event_section() -> str:
+    """
+    Create Event section by reading the raw XML from dataholder_event_block.xml.
+
+    The Event section contains management events such as planting, thinning,
+    harvesting, fertilization, and other silvicultural operations. This function
+    simply reads and returns the event template as-is.
+
+    Returns
+    -------
+    str
+        The complete EventQ section as an XML string from the dataholder file.
+    """
+    event_file_path = "data/dataholder_event_block.xml"
+
+    if not os.path.exists(event_file_path):
+        raise FileNotFoundError(
+            f"Required file '{event_file_path}' not found! "
+            f"Ensure dataholder_event_block.xml exists in the data/ directory."
+        )
+
+    # Read and return the raw XML content
+    with open(event_file_path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+
+def create_outwinset_section() -> str:
+    """
+    Create OutWinSet section by reading the raw XML from dataholder_OutWinSet.xml.
+
+    The OutWinSet section defines output window configurations for FullCAM GUI display,
+    including graph settings, axis parameters, colors, legends, and which carbon pools
+    to visualize. This section controls how simulation results are displayed in the
+    FullCAM desktop application.
+
+    Returns
+    -------
+    str
+        The complete OutWinSet section as an XML string from the dataholder file.
+
+    Notes
+    -----
+    This function reads a static template file and does not modify its contents. We just
+    need to include this content in the final PLO file.
+    """
+    outwinset_file_path = "data/dataholder_OutWinSet.xml"
+
+    if not os.path.exists(outwinset_file_path):
+        raise FileNotFoundError(
+            f"Required file '{outwinset_file_path}' not found! "
+            f"Ensure dataholder_OutWinSet.xml exists in the data/ directory."
+        )
+
+    # Read and return the raw XML content
+    with open(outwinset_file_path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+
+def create_logentryset_section() -> str:
+    """
+    Create LogEntrySet section by reading the raw XML from dataholder_logentryset.xml.
+
+    The LogEntrySet section contains a chronological log of operations and events that
+    occurred during PLO file creation and modification. It tracks configuration changes,
+    spatial data downloads, species selections, and document saves with timestamps.
+    This section is primarily for debugging and audit trail purposes.
+
+    Returns
+    -------
+    str
+        The complete LogEntrySet section as an XML string from the dataholder file.
+
+    Raises
+    ------
+    FileNotFoundError
+        If dataholder_logentryset.xml is not found in the data/ directory.
+
+    Notes
+    -----
+    This function reads a static template file and does not modify its contents. We just
+    need to include this content in the final PLO file.
+    """
+    logentryset_file_path = "data/dataholder_logentryset.xml"
+
+    if not os.path.exists(logentryset_file_path):
+        raise FileNotFoundError(
+            f"Required file '{logentryset_file_path}' not found! "
+            f"Ensure dataholder_logentryset.xml exists in the data/ directory."
+        )
+
+    # Read and return the raw XML content
+    with open(logentryset_file_path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+
+def create_mnrl_mulch_section() -> str:
+    """
+    Create Mnrl and Mulch sections by reading the raw XML from dataholder_Mnrl_Mulch.xml.
+
+    The Mnrl (Mineral Nitrogen) and Mulch sections are REQUIRED placeholder sections when
+    modeling soil carbon with `userSoilMnrl="true"` in the Config section. These sections
+    define nitrogen cycling parameters and mulch layer configurations.
+
+    **IMPORTANT - These are Configuration Placeholders, NOT Manure Specifications:**
+
+    1. **Mnrl Section** - Contains nitrogen cycling biogeochemical model parameters:
+       - Nitrification parameters (nitrK1, nitrK2, nitrKMax): Convert NH4+ to NO3-
+       - Denitrification parameters (deniMax, deniNRMax): Convert NO3- to N2O/N2
+       - Environmental sensitivity functions: Temperature, pH, and water modifiers
+       - Time series for manure inputs (all zeros by default = NO manure applied)
+
+    2. **Mulch Section** - Defines the optional aboveground decomposition layer:
+       - Typically DISABLED (userMulchF="false", userMulchA="false" in Config)
+       - When disabled, parameters exist but are IGNORED during simulation
+       - When enabled, models microbial decomposition between litter and soil
+
+    **Why Include These Sections?**
+
+    When `userSoilMnrl="true"` (nitrogen cycling enabled), FullCAM requires these sections
+    to define how nitrogen moves through nitrification, denitrification, and leaching
+    processes. This affects carbon dynamics because nitrogen availability can limit plant
+    growth and decomposition rates (nitrogen rationing).
+
+    **Default Parameters Are Biogeochemical Constants:**
+
+    The MnrlZap parameters (nitrTemp_a/b/c, deniCO2_a/b/c, etc.) are scientifically
+    calibrated model physics constants from peer-reviewed literature. They define the
+    fundamental nitrogen cycle behavior - NOT site-specific manure applications.
+
+    **Manure Application vs Nitrogen Cycling:**
+
+    - Manure APPLICATION is controlled by time series: `mnrlNMFromOffsF/A` (all zeros here)
+    - Nitrogen CYCLING is controlled by MnrlZap parameters (nitrification/denitrification)
+    - You can have nitrogen cycling WITHOUT manure (natural N-fixation, deposition, etc.)
+
+    Returns
+    -------
+    str
+        The complete Mnrl and Mulch sections as XML strings from the dataholder file.
+        Includes both <Mnrl>...</Mnrl> and <Mulch>...</Mulch> sections concatenated.
+
+    Raises
+    ------
+    FileNotFoundError
+        If dataholder_Mnrl_Mulch.xml is not found in the data/ directory.
+
+    Notes
+    -----
+    - This function reads a static template file with default parameters
+    - All manure time series are set to zero (no manure applied)
+    - Mulch parameters are empty strings (disabled by default)
+    - The API siteinfo response does NOT include these sections because they are
+      model configuration defaults, not site-specific data
+    - If you need to model actual manure applications, modify the time series:
+      `mnrlNMFromOffsF` (forest) or `mnrlNMFromOffsA` (agriculture)
+
+    See Also
+    --------
+    create_config_section : Set userSoilMnrl=True to enable nitrogen cycling
+                           Set userMulchF/A=True to enable mulch layer simulation
+
+    """
+    mnrl_mulch_file_path = "data/dataholder_Mnrl_Mulch.xml"
+
+    if not os.path.exists(mnrl_mulch_file_path):
+        raise FileNotFoundError(
+            f"Required file '{mnrl_mulch_file_path}' not found! "
+            f"Ensure dataholder_Mnrl_Mulch.xml exists in the data/ directory."
+        )
+
+    # Read and return the raw XML content
+    with open(mnrl_mulch_file_path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+
+def create_other_info_section() -> str:
+    """
+    Create other information sections (EconInfo, RINSet, SensPkg, etc.) by reading
+    the raw XML from dataholder_other_info.xml.
+
+    This function returns several PLO file sections that are typically DISABLED but
+    required for file structure completeness. These sections do NOT affect carbon
+    simulation results unless explicitly enabled via Config settings.
+
+    **Sections Included:**
+
+    1. **EconInfo** - Economic analysis parameters (DISABLED by default)
+       - Carbon pricing and discount rates for financial analysis
+       - Net Present Value (NPV) calculations
+       - Only active when Config has userEcon="true"
+       - Does NOT affect physical carbon simulation
+
+    2. **RINSet** - Research Input correlation settings
+       - For sensitivity analysis input correlations
+       - Empty by default (count="0")
+       - Only used in research/sensitivity studies
+
+    3. **SensPkg** - Sensitivity analysis package
+       - Monte Carlo and Latin Hypercube sampling parameters
+       - Convergence criteria for iterative simulations
+       - Only active when Config has userSens="true"
+       - Does NOT affect standard carbon runs
+
+    4. **OptiPkg** - Optimization package
+       - For optimization studies (find best management strategy)
+       - Dummy placeholder when disabled
+       - Only active when Config has userOpti="true"
+
+    5. **WinState** - GUI window state information
+       - Window positions and sizes for FullCAM desktop application
+       - Has NO effect on simulation results
+       - Only affects GUI display
+
+    6. **custColorsDO** - Custom color palette for plots
+       - Color settings for graphs in FullCAM GUI
+       - Has NO effect on simulation results
+
+    **IMPORTANT - These Sections Do NOT Affect Carbon Simulation:**
+
+    When standard Config flags are set (userEcon="false", userSens="false",
+    userOpti="false"), these sections exist in the PLO file but are COMPLETELY
+    IGNORED during carbon simulation. They are structural placeholders that:
+
+    - Maintain PLO file format compatibility
+    - Allow easy future enabling of economic/sensitivity analysis
+    - Store GUI preferences for desktop application
+
+    **EconInfo Details (Most Commonly Misunderstood):**
+
+    The EconInfo section contains financial parameters like:
+    - cPriceBase="20.0": Carbon price ($20/tonne CO2-e)
+    - discountRateEC="0.09": Financial discount rate (9% per year)
+    - incmTreeF/incmSoilF: Which carbon pools to include in income calculations
+
+    These are POST-PROCESSING financial calculations. They do NOT affect:
+    ❌ Tree growth rates
+    ❌ Carbon allocation to biomass pools
+    ❌ Decomposition rates
+    ❌ Nitrogen cycling
+    ❌ Any biophysical processes
+
+    When userEcon="true", FullCAM calculates economic outputs (NPV, carbon credits)
+    AFTER running the carbon simulation. The economic parameters modify financial
+    reporting, not the underlying carbon dynamics.
+
+    **Comparison to Active Sections:**
+
+    | Section | Config Flag | Affects Carbon Simulation? |
+    |---------|-------------|---------------------------|
+    | Mnrl    | userSoilMnrl="true" | ✅ YES (nitrogen rationing) |
+    | Mulch   | userMulchF="false"  | ❌ NO (parameters ignored) |
+    | EconInfo| userEcon="false"    | ❌ NO (financial only) |
+    | SensPkg | userSens="false"    | ❌ NO (sensitivity only) |
+    | OptiPkg | userOpti="false"    | ❌ NO (optimization only) |
+
+    Returns
+    -------
+    str
+        The complete set of "other info" sections as XML strings from the dataholder file.
+        Includes EconInfo, RINSet, SensPkg, OptiPkg, WinState, and custColorsDO.
+
+    Notes
+    -----
+    - This function reads a static template file with default parameters
+    - EconInfo uses a flat $20/tonne carbon price for 30 years (2010-2040)
+    - SensPkg is configured for Latin Hypercube sampling (not used unless userSens="true")
+    - WinState positions are for 1366x768 screen resolution (typical laptop)
+    - All economic/sensitivity/optimization features are DISABLED by default
+    - These sections appear at the END of the PLO file before </DocumentPlot>
+    - Safe to include even when features are disabled (structural requirement)
+
+
+    References
+    ----------
+    - Economic modeling only affects financial outputs, not biophysical simulation
+    - Carbon prices in constant dollars (no inflation adjustment by default)
+    - Sensitivity analysis uses convergence threshold of 1.5% change
+    - Optimization features require additional research-edition licenses
+    """
+    other_info_file_path = "data/dataholder_other_info.xml"
+
+    if not os.path.exists(other_info_file_path):
+        raise FileNotFoundError(
+            f"Required file '{other_info_file_path}' not found! "
+            f"Ensure dataholder_other_info.xml exists in the data/ directory."
+        )
+
+    # Read and return the raw XML content
+    with open(other_info_file_path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+
+
+def assemble_plo_sections(lon, lat, year_start=2010):
+    """Assemble all sections of a PLO file for given lon/lat.
+
+    Parameters
+    ----------
+    lon : float
+        Longitude of the plot.
+    lat : float
+        Latitude of the plot.
+    year_start : int, optional
+        The starting year for the simulation (default is 2010).
+        
+    Returns
+    -------
+    dict
+        A dictionary containing all sections of the PLO file as XML strings.
+    """
+
+    return (f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+            f'<DocumentPlot FileType="FullCAM Plot " Version="5009" pageIxDO="10" tDiagram="-1">'
+                f'{create_meta_section("My_Plot", notesME="")}\n'
+                f'{create_config_section()}\n'
+                f'{create_timing_section()}\n'
+                f'{create_build_section(lon, lat)}\n'
+                f'{create_site_section(lon, lat)}\n'
+                f'{create_species_section(lon, lat)}\n'
+                f'{create_soil_section(lon, lat, yr0TS=year_start)}\n'
+                f'{create_init_section(lon, lat, tsmd_year=year_start)}\n'
+                f'{create_event_section()}\n'
+                f'{create_outwinset_section()}\n'
+                f'{create_logentryset_section()}\n'
+                f'{create_mnrl_mulch_section()}\n'
+                f'{create_other_info_section()}\n'
+            f'</DocumentPlot>')
 

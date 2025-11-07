@@ -1,0 +1,11 @@
+<EventQ count="1">
+    <Event tEV="PlnF" clearEV="false" onEV="true" dateOriginEV="StartSim" nYrsFromStEV="0" nDaysFromStEV="0" tFaqEV="Blank" tAaqEV="Blank" aqStYrEV="1800" aqEnYrEV="2100" nmEV="Plant trees: Euc-globulus seedlings - block geometry" categoryEV="CatUndef" tEvent="Doc" idSP="8" regimeInstance="6d0952cc-eed4-434a-b1f0-699fee0423f2" nmRegime="New Regime">
+        <notesEV/>
+        <PlnF tStemPlnF="Mass" agePlnF="0.47" stemVolPlnF="" stemMPlnF="0.192" branMPlnF="0.089" barkMPlnF="0.034" leafMPlnF="0.05" cortMPlnF="0.091" firtMPlnF="0.014" stemNCRatioPlnF="" branNCRatioPlnF="" barkNCRatioPlnF="" leafNCRatioPlnF="" cortNCRatioPlnF="" firtNCRatioPlnF="" storNMPlnF="" fixPlnF="" phaPlnF="" tTYFCat="Block" treeNmPlnF="Eucalyptus globulus"/>
+        <dateEV CalendarSystemT="FixedLength">20100101</dateEV>
+    </Event>
+    <HeaderState sortIx="0" sortUp="true" sortBy1="false" sortBy2="false" showOnlyHS="false">
+        <headSectW>80,270,785,270,270,0</headSectW>
+    </HeaderState>
+    <showEvT>t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,f</showEvT>
+</EventQ>

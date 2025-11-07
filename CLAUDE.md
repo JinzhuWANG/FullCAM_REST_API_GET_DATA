@@ -29,97 +29,149 @@ When working with PLO files or understanding parameter settings, **always consul
 
 ## Architecture
 
-### Two-Module Design
+### Three-Module Design
 
-The codebase consists of two primary Python modules with distinct responsibilities:
+The codebase consists of three primary Python modules with distinct responsibilities:
 
-1. **`get_data.py`** - API interaction and data retrieval
-   - Fetches site information, climate data, and species lists from FullCAM API
-   - Parallel processing for bulk data downloads across Australian locations
-   - Uses NLUM raster data to identify valid coordinates across Australia
-   - Retrieves PLO templates from the FullCAM API
-   - Submits PLO files for simulation and retrieves results (CSV format)
-   - Includes retry logic with exponential backoff for robust API calls
-   - Saves API responses to `downloaded/` directory for caching and analysis
+1. **`get_data.py`** - Bulk API data download for Australian locations
+   - Fetches site information and species data across all Australian coordinates
+   - Uses LUTO land use raster (`data/lumap.tif`) to identify valid coordinates at 5x downsampled resolution
+   - Parallel processing with 35 concurrent threads for efficient bulk downloads
+   - Includes retry logic with exponential backoff (up to 8 attempts per request)
+   - Downloads two types of data:
+     - `siteInfo_{lon}_{lat}.xml`: Climate time series, soil data, FPI values
+     - `species_{lon}_{lat}.xml`: Eucalyptus globulus (specId=8) species parameters for Plantation category
+   - Saves all API responses to `downloaded/` directory for caching
+   - Skips already-downloaded files to avoid redundant API calls
+   - Primary use: Pre-populate data cache for large-scale spatial modeling projects
 
-2. **`plo_section_functions.py`** - Modular PLO section builders
-   - Individual functions for each PLO XML section
-   - Required parameters listed first, optional parameters with defaults
-   - Comprehensive NumPy-style docstrings with parameter descriptions
-   - Enhanced documentation on calibrations, convergence, and parameter relationships
+2. **`tools/plo_section_functions.py`** - Complete PLO file generation from cached data
+   - **Section creation functions** for each PLO XML section:
+     - `create_meta_section()`: Plot metadata and notes
+     - `create_config_section()`: Simulation configuration flags
+     - `create_timing_section()`: Start/end years, time steps, output frequency
+     - `create_build_section()`: Geographic location and spatial parameters
+     - `create_site_section()`: Site parameters with time series (loads from `downloaded/`)
+     - `create_species_section()`: Species parameters (loads from `downloaded/`)
+     - `create_soil_section()`: Soil carbon pools and cover (loads from `downloaded/`)
+     - `create_init_section()`: Initial conditions for carbon pools
+     - `create_event_section()`: Management events (reads from dataholder template)
+     - `create_outwinset_section()`: GUI output window settings
+     - `create_logentryset_section()`: Audit log entries
+     - `create_mnrl_mulch_section()`: Nitrogen cycling and mulch layer parameters
+     - `create_other_info_section()`: Economic, sensitivity, optimization settings
+   - **Assembly function**: `assemble_plo_sections(lon, lat, year_start=2010)`
+     - Takes coordinates and start year
+     - Loads site-specific data from `downloaded/` directory
+     - Loads template data from `data/dataholder_*.xml` files
+     - Returns complete PLO file as XML string ready for simulation
+   - All functions include comprehensive NumPy-style docstrings
+   - Enhanced documentation on calibrations, convergence, nitrogen cycling, irrigation modes
    - Critical guidance on forest category selection and its impact on carbon predictions
-   - Detailed explanations of simulation vs output resolution parameters
-   - Functions: `create_meta_section()`, `create_config_section()`, `create_timing_section()`, `create_build_section()`, `create_site_section()`, `create_timeseries()`
-   - Returns XML string fragments (no root wrapper or declaration)
+
+3. **`get_PLO.py`** - PLO generation and simulation workflow
+   - Generates PLO file using `assemble_plo_sections()` from `tools/plo_section_functions.py`
+   - Submits PLO to FullCAM Simulator API for carbon accounting simulation
+   - Receives CSV results with carbon stock/flux time series
+   - Saves simulation results to `data/plot_simulation_response.csv`
+   - Demonstrates end-to-end workflow: coordinates → PLO file → simulation → results
+   - Primary use: Single-plot simulation from cached data
 
 ### Project Structure
 
 ```
 .
-├── get_data.py                    # API client (fetch data, run simulations)
-├── plo_section_functions.py       # Modular PLO section builders
-├── README.md                      # User-facing documentation
-├── CLAUDE.md                      # Developer guide (this file)
-├── .gitignore                     # Git ignore patterns
-├── data/                          # Cached API responses and example PLO files
-│   ├── siteinfo_response.xml      # Site climate and soil data
-│   ├── species_response.xml       # Species information
-│   ├── regimes_response.xml       # Management regime data
-│   ├── templates_response.xml     # List of available templates
-│   ├── single_template_response.xml  # Downloaded PLO template
-│   ├── updated_plotfile_response.xml # Updated plot file
-│   ├── E_globulus_2024.plo        # Example Eucalyptus plot
-│   └── E_globulus_2024 copy.plo   # Example plot copy
-└── tools/                         # Documentation and utilities
-    ├── FullCAM_Documentation_Complete.html  # Official FullCAM docs
-    └── get_fullcam_help.py        # Helper script for documentation
+├── get_data.py                                 # Bulk API data download script (Australian coordinates)
+├── get_PLO.py                                  # PLO generation and simulation workflow
+├── README.md                                   # User-facing documentation
+├── CLAUDE.md                                   # Developer guide (this file)
+├── .gitignore                                  # Git ignore patterns
+├── data/                                       # Template XML files and example data
+│   ├── dataholder_site.xml                     # Site section template
+│   ├── dataholder_soil.xml                     # Soil section template
+│   ├── dataholder_init.xml                     # Init section template
+│   ├── dataholder_event_block.xml              # Event section template
+│   ├── dataholder_OutWinSet.xml                # GUI output window template
+│   ├── dataholder_logentryset.xml              # Log entries template
+│   ├── dataholder_Mnrl_Mulch.xml               # Nitrogen/Mulch template
+│   ├── dataholder_other_info.xml               # Economic/Sensitivity/Optimization template
+│   ├── E_globulus_2024.plo                     # Example Eucalyptus plot
+│   ├── plot_simulation_response.csv            # Simulation results CSV
+│   ├── lumap.tif                               # LUTO land use raster (coordinate source)
+│   ├── siteinfo_response.xml                   # Example API response (site info)
+│   ├── species_response.xml                    # Example API response (species)
+│   └── single_template_response.xml            # Example API response (template)
+├── downloaded/                                 # Cached API responses for all Australian locations
+│   ├── siteInfo_{lon}_{lat}.xml                # Climate, soil, FPI data (thousands of files)
+│   └── species_{lon}_{lat}.xml                 # Species parameters (thousands of files)
+└── tools/                                      # PLO generation library and utilities
+    ├── plo_section_functions.py                # Complete PLO file generation module
+    ├── copy_files.py                           # Utility to copy downloaded files between directories
+    ├── FullCAM_Documentation_Complete.html     # Official FullCAM docs
+    └── get_fullcam_help.py                     # Helper script for documentation
 
 ```
 
 ### PLO Generation Approach
 
-**Modular Function Approach:**
+**The project uses a data-driven approach that combines cached API data with XML templates:**
+
+1. **Pre-download data** using `get_data.py` (one-time setup for large areas)
+2. **Generate PLO files** using `assemble_plo_sections()` which:
+   - Loads site-specific data from `downloaded/siteInfo_{lon}_{lat}.xml` and `species_{lon}_{lat}.xml`
+   - Merges with XML templates from `data/dataholder_*.xml` files
+   - Returns complete, simulation-ready PLO file
+
+**Quick Example - Generate PLO for a single location:**
 ```python
-# Build sections programmatically with type-safe functions
-from plo_section_functions import (
-    create_meta_section,
-    create_build_section,
-    create_timing_section,
-    create_config_section,
-    create_site_section,
-    create_timeseries
-)
+from tools.plo_section_functions import assemble_plo_sections
 
-# Create individual sections
-meta = create_meta_section("Plot_Name", notesME="My notes")
-config = create_config_section(tPlot="CompF")
-timing = create_timing_section(stYrYTZ="2020", enYrYTZ="2050")
-build = create_build_section(lonBL=148.16, latBL=-35.61)
+# Generate complete PLO file from cached data
+lon, lat = 148.16, -35.61
+year_start = 2010
 
-# Create time series
-temps = [15.68, 17.65, 13.03, 10.66, 5.53, 4.72,
-         2.97, 3.65, 4.72, 9.66, 11.96, 15.80]
-ts = create_timeseries("avgAirTemp", temps, yr0TS="2020", nYrsTS="1")
+plo_xml = assemble_plo_sections(lon, lat, year_start)
 
-# Create site with time series
-site = create_site_section(1, [ts])
-
-# Manually assemble the complete PLO file
-plo_content = f'''<?xml version="1.0" encoding="UTF-8"?>
-<DocumentPlot version="5009">
-{meta}
-{config}
-{timing}
-{build}
-{site}
-</DocumentPlot>'''
-
-# Save to file
+# Save to file (optional)
 with open("my_plot.plo", "w", encoding="utf-8") as f:
-    f.write(plo_content)
+    f.write(plo_xml)
 ```
 
-This approach provides better documentation, type safety, and parameter validation through comprehensive docstrings and Python type hints.
+**What `assemble_plo_sections()` does internally:**
+- Calls 13 section creation functions in sequence
+- Loads climate time series (avgAirTemp, rainfall, openPanEvap, forestProdIx) from API cache
+- Populates soil carbon pools from siteinfo data
+- Calculates initial TSMD (Top Soil Moisture Deficit) for specified start year
+- Merges species parameters (growth calibrations, turnover rates, allocation)
+- Includes management events, nitrogen cycling, and GUI configuration from templates
+- Returns complete `<?xml version...><DocumentPlot>...</DocumentPlot>` string
+
+**Advanced - Customize individual sections:**
+```python
+from tools.plo_section_functions import (
+    create_meta_section,
+    create_config_section,
+    create_build_section,
+    create_site_section,
+    # ... other section functions
+)
+
+# Override specific sections with custom parameters
+meta = create_meta_section("Custom_Plot_Name", notesME="My research plot")
+config = create_config_section(tPlot="CompF", userN=True)  # Enable nitrogen cycling
+build = create_build_section(lon, lat, frCat="Plantation", areaBL="FiveKm")
+
+# Load site data from cache (requires lon/lat parameters)
+site = create_site_section(lon, lat)
+
+# Manually assemble if needed (see assemble_plo_sections() for full example)
+```
+
+This approach provides:
+- **Efficiency**: Reuse cached API data for millions of plots without repeated API calls
+- **Consistency**: All plots use same XML structure and parameter defaults
+- **Flexibility**: Override any section with custom parameters when needed
+- **Documentation**: Comprehensive docstrings explain every parameter's effect on carbon simulation
 
 ## PLO File Structure
 
@@ -262,23 +314,46 @@ raw_data = ts_elem.find('rawTS').text.split(',')
 
 ### Running Scripts
 
-**Test modular section functions:**
-```bash
-python plo_section_functions.py
-```
-Outputs formatted examples of each section type to the console.
-
-**Fetch API data (cache responses):**
+**Download bulk API data (one-time setup for Australian locations):**
 ```bash
 python get_data.py
 ```
-Fetches site info and species data for all Australian locations using parallel processing (50 concurrent threads). Uses NLUM raster data to identify valid coordinates. Includes exponential backoff retry logic for robustness. Saves responses to `downloaded/` directory. Requires valid API key and NLUM raster file (`data/NLUM_2010-11_clip.tif`).
+- Fetches site info and species data for all Australian locations
+- Uses LUTO land use raster (`data/lumap.tif`) at 5x downsampled resolution
+- Parallel processing with 35 concurrent threads
+- Includes exponential backoff retry logic (up to 8 attempts per request)
+- Saves to `downloaded/` directory: `siteInfo_{lon}_{lat}.xml` and `species_{lon}_{lat}.xml`
+- Skips already-downloaded files to avoid redundant API calls
+- Requires valid API key in `FULLCAM_API_KEY` environment variable
+- Note: This is a long-running script for large-scale spatial modeling (thousands of locations)
+
+**Generate PLO file and run simulation:**
+```bash
+python get_PLO.py
+```
+- Generates complete PLO file using `assemble_plo_sections()` from `tools/plo_section_functions.py`
+- Uses cached data from `downloaded/` directory for specified coordinates
+- Submits PLO to FullCAM Simulator API
+- Saves simulation results to `data/plot_simulation_response.csv`
+- Edit coordinates in script to change location (default: lon=148.16, lat=-35.61)
+
+**Copy downloaded files between directories:**
+```bash
+python tools/copy_files.py
+```
+- Utility to copy downloaded API responses from network drive to local machine
+- Uses parallel processing for fast file transfers
+- Skips files that already exist in destination
+- Edit `dir_from` and `dir_to` variables in script to change source/destination paths
 
 ### File Locations
 
-**API response cache:** `data/` directory contains cached XML responses and example PLO files
+**Downloaded API cache:** `downloaded/` directory contains thousands of XML files (siteInfo and species data)
+**Template XML files:** `data/` directory contains dataholder_*.xml templates used by section functions
 **Documentation:** `tools/` directory contains FullCAM documentation HTML and helper scripts
-**Generated PLO files:** Saved to current working directory or specified path
+**PLO generation library:** `tools/plo_section_functions.py` contains all section creation functions
+**Generated PLO files:** Created in-memory by `assemble_plo_sections()` (save to file if needed)
+**Simulation results:** `data/plot_simulation_response.csv` contains carbon stock/flux time series
 
 ## Important Implementation Details
 
@@ -565,24 +640,47 @@ save_plo(plo, "my_plot.plo")
 
 ## Function Reference
 
+### Assembly Function (Primary Entry Point)
+
+**`assemble_plo_sections(lon, lat, year_start=2010)`** - Complete PLO file generation
+- **Required Parameters:** `lon` (longitude), `lat` (latitude)
+- **Optional Parameters:** `year_start` (simulation start year, default: 2010)
+- **Returns:** Complete PLO XML string ready for simulation
+- **Data Sources:**
+  - Loads from `downloaded/siteInfo_{lon}_{lat}.xml` (climate, soil, FPI)
+  - Loads from `downloaded/species_{lon}_{lat}.xml` (species parameters)
+  - Loads from `data/dataholder_*.xml` (template sections)
+- **Usage:** Primary function for generating PLO files from cached data
+- **Raises:** `FileNotFoundError` if required downloaded files missing
+
 ### Section Creation Functions
 
-All section creation functions in `plo_section_functions.py` follow these design principles:
+All section creation functions in `tools/plo_section_functions.py` follow these design principles:
 - Required parameters come first (no defaults)
 - Optional parameters follow (with sensible defaults)
+- Most functions load data from `downloaded/` or `data/` directories
 - Return XML string fragments (no XML declaration or root wrapper)
 - Include comprehensive NumPy-style docstrings
 
-**Available Functions:**
+**Available Functions (called internally by `assemble_plo_sections()`):**
 
-| Function | Required Parameters | Purpose |
-|----------|-------------------|---------|
-| `create_meta_section()` | `nmME` (plot name) | Plot metadata and notes |
-| `create_config_section()` | None (all optional) | Simulation configuration flags |
-| `create_timing_section()` | None (all optional) | Start/end years, time steps |
-| `create_build_section()` | `lonBL`, `latBL` | Geographic location |
-| `create_site_section()` | `count`, `timeseries_list` | Site parameters with time series |
-| `create_timeseries()` | `tInTS`, `rawTS_values` | Individual time series data |
+| Function | Required Parameters | Data Source | Purpose |
+|----------|--------------------|--------------| ---------|
+| `create_meta_section()` | `nmME` (plot name, default: "New_Plot") | Manual/defaults | Plot metadata and notes |
+| `create_config_section()` | None (all optional) | Defaults | Simulation configuration flags |
+| `create_timing_section()` | None (all optional) | Defaults | Start/end years, time steps |
+| `create_build_section()` | `lonBL`, `latBL` | Manual | Geographic location |
+| `create_site_section()` | `lon`, `lat` | `downloaded/siteInfo_{lon}_{lat}.xml` + `data/dataholder_site.xml` | Site parameters with time series |
+| `create_species_section()` | `lon`, `lat` | `downloaded/species_{lon}_{lat}.xml` | Species growth calibrations |
+| `create_soil_section()` | `lon`, `lat`, `yr0TS` | `downloaded/siteInfo_{lon}_{lat}.xml` + `data/dataholder_soil.xml` | Soil carbon pools and cover |
+| `create_init_section()` | `lon`, `lat`, `tsmd_year` | `downloaded/siteInfo_{lon}_{lat}.xml` + `data/dataholder_init.xml` | Initial carbon pool values |
+| `create_event_section()` | None | `data/dataholder_event_block.xml` | Management events template |
+| `create_outwinset_section()` | None | `data/dataholder_OutWinSet.xml` | GUI output window settings |
+| `create_logentryset_section()` | None | `data/dataholder_logentryset.xml` | Audit log entries |
+| `create_mnrl_mulch_section()` | None | `data/dataholder_Mnrl_Mulch.xml` | Nitrogen cycling and mulch |
+| `create_other_info_section()` | None | `data/dataholder_other_info.xml` | Economic/sensitivity/optimization |
+
+**Note:** Most functions require pre-downloaded data from `get_data.py`. Run `get_data.py` first to populate the `downloaded/` directory before generating PLO files.
 
 ### Troubleshooting Common Issues
 
@@ -607,17 +705,22 @@ All section creation functions in `plo_section_functions.py` follow these design
 The codebase requires:
 - `requests` - HTTP requests to FullCAM API
 - `lxml` - XML parsing and generation
-- `pandas` - Data manipulation and CSV handling
-- `rioxarray` - Geospatial raster data handling (NLUM coordinate extraction)
-- `joblib` - Parallel processing for bulk API calls
+- `pandas` - Data manipulation and CSV handling (simulation results)
+- `rioxarray` - Geospatial raster data handling (LUTO coordinate extraction in `get_data.py`)
+- `xarray` - Raster data manipulation (used with rioxarray)
+- `numpy` - Numerical operations (array handling)
+- `joblib` - Parallel processing for bulk API calls and file copying
 - `tqdm` - Progress bars for long-running operations
-- `json` - JSON handling (minimal usage)
-- `typing` - Type hints
+- `scandir_rs` - Fast directory scanning (used in `copy_files.py`)
+- `shutil` - File operations (used in `copy_files.py`)
+- `os`, `time`, `re` - Standard library modules
 
 No requirements.txt exists. Typical installation:
 ```bash
-pip install requests lxml pandas rioxarray joblib tqdm
+pip install requests lxml pandas rioxarray xarray numpy joblib tqdm scandir_rs
 ```
+
+**Note:** `scandir_rs` is only needed for `copy_files.py` utility script. Core PLO generation functionality (get_data.py, get_PLO.py, plo_section_functions.py) works without it.
 
 ## Important Constraints
 
