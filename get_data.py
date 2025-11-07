@@ -20,6 +20,11 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
+# Create downloaded folder if not exists
+if not os.path.exists('downloaded'):
+    os.makedirs('downloaded')
+
+
 # Get all lon/lat for Australia; the raster used is taken from the template of LUTO
 Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True).compute() >= 0 # >=0 only includes LUTO study area
 lon_lat = Aus_xr.to_dataframe(name='mask').reset_index()[['y', 'x', 'mask']].round({'x':2, 'y':2})
