@@ -55,20 +55,20 @@ scrap_coords = lon_lat\
 
 
 # Remove existing downloaded files
+files = [entry.path for entry in Scandir('downloaded')]
 lon_lat_reg = re.compile(r'.*_(-?\d+\.\d+)_(-?\d+\.\d+)\.xml')
 
 existing_siteinfo = []
 existing_species = []
 
 # Scan directory once using scandir_rs
-for entry in Scandir('downloaded'):
-    filename = entry.path
-    if filename.startswith('siteInfo_'):
-        lon, lat = lon_lat_reg.findall(filename)[0]
+for entry in files:
+    if entry.startswith('siteInfo_'):
+        lon, lat = lon_lat_reg.findall(entry)[0]
         existing_siteinfo.append((float(lat), float(lon)))
-    elif filename.startswith('species_'):
-        lon, lat = lon_lat_reg.findall(filename)[0]
-        existing_siteinfo.append((float(lat), float(lon)))
+    elif entry.startswith('species_'):
+        lon, lat = lon_lat_reg.findall(entry)[0]
+        existing_species.append((float(lat), float(lon)))
 
 
 scrap_coords_siteinfo = scrap_coords[~scrap_coords.set_index(['y', 'x']).index.isin(existing_siteinfo)].reset_index(drop=True)
