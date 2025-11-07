@@ -3,6 +3,7 @@ import requests
 import rioxarray as rio
 import xarray as xr
 import numpy as np
+from scandir_rs import Scandir
 
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
@@ -10,6 +11,14 @@ from tqdm.auto import tqdm
 
 
 # Configuration
+#   If having issues with API access, try running below snippet to temporarily adding key to current session:
+#   WARNING: Do not hardcode API keys in production code!
+
+'''
+import os
+os.environ["FULLCAM_API_KEY"] = "your_api_key_here"
+'''
+
 API_KEY = os.getenv("FULLCAM_API_KEY")
 if not API_KEY: raise ValueError("`FULLCAM_API_KEY`environment variable not set!")
 
@@ -48,11 +57,18 @@ scrap_coords = lon_lat\
 # Remove existing downloaded files
 lon_lat_reg = re.compile(r'.*_(-?\d+\.\d+)_(-?\d+\.\d+)\.xml')
 
-existing_siteinfo = [lon_lat_reg.findall(f)[0] for f in os.listdir('downloaded') if f.startswith('siteInfo_')]
-existing_siteinfo = [(float(lat), float(lon)) for lon, lat in existing_siteinfo]
+existing_siteinfo = []
+existing_species = []
 
-existing_species = [lon_lat_reg.findall(f)[0] for f in os.listdir('downloaded') if f.startswith('species_')]
-existing_species = [(float(lat), float(lon)) for lon, lat in existing_species]
+# Scan directory once using scandir_rs
+for entry in Scandir('downloaded'):
+    filename = entry.path
+    if filename.startswith('siteInfo_'):
+        lon, lat = lon_lat_reg.findall(filename)[0]
+        existing_siteinfo.append((float(lat), float(lon)))
+    elif filename.startswith('species_'):
+        lon, lat = lon_lat_reg.findall(filename)[0]
+        existing_siteinfo.append((float(lat), float(lon)))
 
 
 scrap_coords_siteinfo = scrap_coords[~scrap_coords.set_index(['y', 'x']).index.isin(existing_siteinfo)].reset_index(drop=True)
@@ -83,11 +99,11 @@ def get_siteinfo(lat, lon, try_number=8):
                 return
             else:
                 # HTTP error - apply backoff before retry
-                if attempt < try_number - 1:  # Don't sleep on last attempt
+                if attempt < try_number - 1:  
                     time.sleep(2**attempt)
 
         except requests.RequestException as e:
-            if attempt < try_number - 1:  # Don't sleep on last attempt
+            if attempt < try_number - 1:  
                 time.sleep(2**attempt)
 
     return f'{lon},{lat}', "Failed"
@@ -130,11 +146,11 @@ def get_species(lat, lon, try_number=8):
                 return
             else:
                 # HTTP error - apply backoff before retry
-                if attempt < try_number - 1:  # Don't sleep on last attempt
+                if attempt < try_number - 1:  
                     time.sleep(2**attempt)
 
         except requests.RequestException as e:
-            if attempt < try_number - 1:  # Don't sleep on last attempt
+            if attempt < try_number - 1:  
                 time.sleep(2**attempt)
                 
     return f'{lon},{lat}', "Failed"

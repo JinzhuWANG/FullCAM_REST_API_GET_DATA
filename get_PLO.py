@@ -37,7 +37,7 @@ url = f"{BASE_URL_SIM}{ENDPOINT}"
 raw_str = assemble_plo_sections(lon, lat, 2010)
 
 
-response = requests.post(url, files={'file': ('test.plo', raw_str)}, headers={"Ocp-Apim-Subscription-Key": API_KEY},  timeout=30)
+response = requests.post(url, files={'file': ('my_plo.plo', raw_str)}, headers={"Ocp-Apim-Subscription-Key": API_KEY},  timeout=30)
 response_df = pd.read_csv(StringIO(response.text))
 response_df.to_csv('data/plot_simulation_response.csv', index=False)
 
