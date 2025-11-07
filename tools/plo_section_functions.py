@@ -6,6 +6,8 @@ Each function generates XML for a specific section with proper Python docstrings
 import os
 from lxml import etree
 
+from get_data import get_siteinfo, get_species
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
@@ -1582,6 +1584,16 @@ def assemble_plo_sections(lon, lat, year_start=2010):
     dict
         A dictionary containing all sections of the PLO file as XML strings.
     """
+    
+    site_file = f'downloaded/siteInfo_{lon}_{lat}.xml'
+    specie_file = f'downloaded/species_{lon}_{lat}.xml'
+    
+    if not os.path.exists(site_file):
+        print(f'Downloaded site file for {site_file}!')
+        get_siteinfo(lat, lon)
+    if not os.path.exists(specie_file):
+        print(f'Downloaded species file for {specie_file}!')
+        get_species(lat, lon)
 
     return (f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
             f'<DocumentPlot FileType="FullCAM Plot " Version="5009" pageIxDO="10" tDiagram="-1">'
