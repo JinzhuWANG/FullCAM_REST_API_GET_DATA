@@ -31,9 +31,10 @@ HEADERS = {
 
 
 # ----------------------- Plot simulation --------------------------
-lon, lat = 146.03, -37.75
+lon, lat = 148.16, -35.61
 url = f"{BASE_URL_SIM}{ENDPOINT}"
 raw_str = assemble_plo_sections(lon, lat, 2010)
+
 
 response = requests.post(url, files={'file': ('test.plo', raw_str)}, headers={"Ocp-Apim-Subscription-Key": API_KEY},  timeout=30)
 response_df = pd.read_csv(StringIO(response.text))
