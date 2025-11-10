@@ -1,4 +1,7 @@
 import os
+import rioxarray as rio
+import xarray as xr
+import numpy as np
 
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
@@ -44,7 +47,4 @@ tasks = [
 
 for _ in tqdm(Parallel(n_jobs=35,  backend='threading', return_as='generator_unordered')(tasks), total=len(tasks)):
     pass
-
-
-
 

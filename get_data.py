@@ -31,8 +31,6 @@ if not os.path.exists('downloaded'):
 Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True).compute() >= 0 # >=0 only includes LUTO study area
 lon_lat = Aus_xr.to_dataframe(name='mask').reset_index()[['y', 'x', 'mask']].round({'x':2, 'y':2})
 lon_lat['cell_idx'] = range(len(lon_lat))
-lon_lat['site_fetch'] = 'Untried'
-lon_lat['species_fetch'] = 'Untried'
 
 
 Aus_cell = xr.DataArray(np.arange(Aus_xr.size).reshape(Aus_xr.shape), coords=Aus_xr.coords, dims=Aus_xr.dims)

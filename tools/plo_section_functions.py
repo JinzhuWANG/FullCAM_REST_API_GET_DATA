@@ -3,13 +3,16 @@ FullCAM PLO File Section Functions
 Modular functions for creating individual sections of PLO files.
 Each function generates XML for a specific section with proper Python docstrings.
 """
-from io import StringIO
+
 import os
 import time
 import pandas as pd
-from lxml import etree
 import requests
+
+from lxml import etree
+from io import StringIO
 from threading import Lock
+
 
 # Configuration
 API_KEY = os.getenv("FULLCAM_API_KEY")
@@ -33,7 +36,7 @@ def _bool_to_xml(value: bool) -> str:
     """Convert Python bool to XML string format ('true'/'false')."""
     return "true" if value else "false"
 
-def get_siteinfo(lat, lon, try_number=8, cache_file='downloaded/successful_downloads.txt'):
+def get_siteinfo(lat, lon, try_number=8, download_records='downloaded/successful_downloads.txt'):
     PARAMS = {
         "latitude": lat,
         "longitude": lon,
@@ -57,7 +60,7 @@ def get_siteinfo(lat, lon, try_number=8, cache_file='downloaded/successful_downl
 
                 # Log successful download (thread-safe append with lock)
                 with _cache_write_lock:
-                    with open(cache_file, 'a', encoding='utf-8') as cache:
+                    with open(download_records, 'a', encoding='utf-8') as cache:
                         cache.write(f'{filename}\n')
 
                 return
@@ -72,7 +75,7 @@ def get_siteinfo(lat, lon, try_number=8, cache_file='downloaded/successful_downl
 
     return f'{lon},{lat}', "Failed"
 
-def get_species(lat, lon, try_number=8, cache_file='downloaded/successful_downloads.txt'):
+def get_species(lat, lon, try_number=8, download_records='downloaded/successful_downloads.txt'):
 
     url = f"{BASE_URL_DATA}/2024/data-builder/species"
     PARAMS = {
@@ -88,17 +91,14 @@ def get_species(lat, lon, try_number=8, cache_file='downloaded/successful_downlo
 
         try:
             response = requests.get(url, params=PARAMS, headers=HEADERS, timeout=100)
-
             if response.status_code == 200:
                 filename = f'species_{lon}_{lat}.xml'
                 with open(f'downloaded/{filename}', 'wb') as f:
                     f.write(response.content)
-
                 # Log successful download (thread-safe append with lock)
                 with _cache_write_lock:
-                    with open(cache_file, 'a', encoding='utf-8') as cache:
+                    with open(download_records, 'a', encoding='utf-8') as cache:
                         cache.write(f'{filename}\n')
-
                 return
             else:
                 # HTTP error - apply backoff before retry
@@ -111,12 +111,22 @@ def get_species(lat, lon, try_number=8, cache_file='downloaded/successful_downlo
 
     return f'{lon},{lat}', "Failed"
 
-def get_plot_simulation(lon, lat, url, headers,  try_number=5, timeout=60, cache_file='downloaded/successful_downloads.txt'):
-    
-    plo_str = assemble_plo_sections(lon, lat, 2010)
-    
-    for attempt in range(try_number):
 
+
+def get_plot_simulation(lon, lat, url, headers,  try_number=5, timeout=60, download_records='downloaded/successful_downloads.txt'):
+    
+    # Assemble PLO sections, only trying once here to redownload missing data
+    try:
+        plo_str = assemble_plo_sections(lon, lat, 2010)
+    except Exception as e:
+        get_siteinfo(lat, lon)
+        get_species(lat, lon)
+    
+    if plo_str is None:
+        plo_str = assemble_plo_sections(lon, lat, 2010)
+    
+    # Re-attempt assembly after redownloading
+    for attempt in range(try_number):
         try:
             response = requests.post(
                 url, 
@@ -130,7 +140,7 @@ def get_plot_simulation(lon, lat, url, headers,  try_number=5, timeout=60, cache
                 response_df.to_csv(f'downloaded/df_{lat}_{lon}.csv', index=False)
                 # Add the record to cache file
                 with _cache_write_lock:
-                    with open(cache_file, 'a', encoding='utf-8') as cache:
+                    with open(download_records, 'a', encoding='utf-8') as cache:
                         cache.write(f'df_{lat}_{lon}.csv\n')
                 return 
             else:
@@ -138,7 +148,7 @@ def get_plot_simulation(lon, lat, url, headers,  try_number=5, timeout=60, cache
                 if attempt < try_number - 1:
                     time.sleep(2**attempt)
 
-        except requests.RequestException as e:
+        except Exception as e:
             if attempt < try_number - 1:
                 time.sleep(2**attempt)
 
@@ -1359,7 +1369,7 @@ def create_init_section(lon: float, lat: float, tsmd_year: int = 2010):
     initFracHums = float(locn_soil.get('initFracHums'))
     initFracInrt = float(locn_soil.get('initFracInrt'))
     initTotalC = float(locn_soil.get('initTotalC'))
-
+    
     # Calculate soil carbon pool values (tonnes C/ha)
     dpmaCMInitF = initFracDpma * initTotalC
     rpmaCMInitF = initFracRpma * initTotalC
@@ -1367,7 +1377,7 @@ def create_init_section(lon: float, lat: float, tsmd_year: int = 2010):
     biosCMInitF = initFracBios * initTotalC
     humsCMInitF = initFracHums * initTotalC
     inrtCMInitF = initFracInrt * initTotalC
-
+    
     # Extract TSMD time series and get value for specified year
     tsmd_elem = site_root.xpath(".//TimeSeries[@tInTS='initTSMD']")[0]
     yr0TS = int(tsmd_elem.get('yr0TS'))  # Start year (e.g., 1970)
