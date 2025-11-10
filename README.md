@@ -58,8 +58,12 @@ This script:
 - Uses LUTO land use raster to identify valid Australian coordinates
 - Downloads `siteInfo_{lon}_{lat}.xml` (climate, soil, FPI) for each location
 - Downloads `species_{lon}_{lat}.xml` (Eucalyptus globulus parameters)
+- **Intelligent caching**: Logs successful downloads to `downloaded/successful_downloads.txt`
+  - Fast resume on interruption (reads cache file in seconds vs scanning millions of files)
+  - Thread-safe logging for concurrent downloads
+  - Automatic skip of already-downloaded coordinates
+  - See [CACHE_USAGE.md](CACHE_USAGE.md) for detailed documentation
 - Saves to `downloaded/` directory
-- Skips already-downloaded files
 - Uses 35 concurrent threads with exponential backoff retry logic
 
 **Step 2: Generate PLO file from cached data:**
@@ -138,9 +142,13 @@ print(results_df[['Year', 'TotalC_tCha']].head())
 │   └── single_template_response.xml            # Example API response (template)
 ├── downloaded/                                 # Cached API responses (thousands of files)
 │   ├── siteInfo_{lon}_{lat}.xml                # Climate, soil, FPI data per location
-│   └── species_{lon}_{lat}.xml                 # Species parameters per location
+│   ├── species_{lon}_{lat}.xml                 # Species parameters per location
+│   ├── successful_downloads.txt                # Cache index tracking all successful downloads
+│   └── simulation/                             # Simulation results
+│       └── df_{lat}_{lon}.csv                  # Carbon stock/flux time series per location
 └── tools/                                      # PLO generation library and utilities
     ├── plo_section_functions.py                # Complete PLO file generation module
+    ├── cache_manager.py                        # Cache file management utilities
     ├── copy_files.py                           # Utility to copy downloaded files between directories
     ├── FullCAM_Documentation_Complete.html     # Official FullCAM docs
     └── get_fullcam_help.py                     # Documentation helper script
@@ -153,6 +161,7 @@ print(results_df[['Year', 'TotalC_tCha']].head())
 | [get_data.py](get_data.py) | Bulk download of API data for all Australian locations (one-time setup) |
 | [get_PLO.py](get_PLO.py) | Example workflow: generate PLO → run simulation → save results |
 | [tools/plo_section_functions.py](tools/plo_section_functions.py) | Complete PLO file generation from cached data |
+| [tools/cache_manager.py](tools/cache_manager.py) | Cache file rebuild and verification utilities |
 | [tools/copy_files.py](tools/copy_files.py) | Utility to copy downloaded files between directories (parallel processing) |
 
 ## PLO File Structure
@@ -403,7 +412,12 @@ Fetches and caches site information and species data for thousands of coordinate
 - Downloads `siteInfo_{lon}_{lat}.xml` (climate, soil, FPI) for each location
 - Downloads `species_{lon}_{lat}.xml` (Eucalyptus globulus parameters)
 - Uses 35 concurrent threads with exponential backoff retry logic
-- Skips already-downloaded files
+- **Intelligent caching** via `downloaded/successful_downloads.txt`:
+  - Logs all successful downloads (thread-safe append)
+  - Fast startup: Reads cache file (seconds) vs scanning millions of files (minutes/hours)
+  - Automatic resume on interruption
+  - See [CACHE_USAGE.md](CACHE_USAGE.md) for details
+- Skips already-downloaded coordinates based on cache
 - Saves to `downloaded/` directory
 
 **Usage:**
@@ -444,6 +458,15 @@ Edit the `lon`, `lat`, and `year_start` variables in the script to change locati
 **Issue: "API authentication failed"**
 - Verify your API key is correct
 - Check the key is included in request headers: `Ocp-Apim-Subscription-Key`
+
+**Issue: "Slow startup when running get_data.py"**
+- Check that `downloaded/successful_downloads.txt` exists
+- If missing or corrupted, rebuild with: `python tools/cache_manager.py rebuild`
+- See [CACHE_USAGE.md](CACHE_USAGE.md) for cache management details
+
+**Issue: "Cache out of sync with actual files"**
+- Run `python tools/cache_manager.py verify` to check integrity
+- Rebuild cache with: `python tools/cache_manager.py rebuild`
 
 ## Version Compatibility
 

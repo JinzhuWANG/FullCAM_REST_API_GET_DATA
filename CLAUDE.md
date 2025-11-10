@@ -41,8 +41,14 @@ The codebase consists of three primary Python modules with distinct responsibili
    - Downloads two types of data:
      - `siteInfo_{lon}_{lat}.xml`: Climate time series, soil data, FPI values
      - `species_{lon}_{lat}.xml`: Eucalyptus globulus (specId=8) species parameters for Plantation category
-   - Saves all API responses to `downloaded/` directory for caching
-   - Skips already-downloaded files to avoid redundant API calls
+   - **Intelligent caching system** using `downloaded/successful_downloads.txt`:
+     - Logs all successful downloads to a text file (one filename per line)
+     - Fast startup: Reads cache file (seconds) instead of scanning millions of files (minutes/hours)
+     - Thread-safe append operations for concurrent downloads
+     - Automatic resume on interruption (no state loss)
+     - See [CACHE_USAGE.md](CACHE_USAGE.md) for detailed documentation
+   - Saves all API responses to `downloaded/` directory
+   - Skips already-downloaded coordinates based on cache file
    - Primary use: Pre-populate data cache for large-scale spatial modeling projects
 
 2. **`tools/plo_section_functions.py`** - Complete PLO file generation from cached data
@@ -103,9 +109,13 @@ The codebase consists of three primary Python modules with distinct responsibili
 │   └── single_template_response.xml            # Example API response (template)
 ├── downloaded/                                 # Cached API responses for all Australian locations
 │   ├── siteInfo_{lon}_{lat}.xml                # Climate, soil, FPI data (thousands of files)
-│   └── species_{lon}_{lat}.xml                 # Species parameters (thousands of files)
+│   ├── species_{lon}_{lat}.xml                 # Species parameters (thousands of files)
+│   ├── successful_downloads.txt                # Cache file tracking all successful downloads
+│   └── simulation/                             # Simulation results
+│       └── df_{lat}_{lon}.csv                  # Carbon stock/flux time series per location
 └── tools/                                      # PLO generation library and utilities
     ├── plo_section_functions.py                # Complete PLO file generation module
+    ├── cache_manager.py                        # Cache file management utilities
     ├── copy_files.py                           # Utility to copy downloaded files between directories
     ├── FullCAM_Documentation_Complete.html     # Official FullCAM docs
     └── get_fullcam_help.py                     # Helper script for documentation
@@ -322,8 +332,12 @@ python get_data.py
 - Uses LUTO land use raster (`data/lumap.tif`) at 5x downsampled resolution
 - Parallel processing with 35 concurrent threads
 - Includes exponential backoff retry logic (up to 8 attempts per request)
+- **Intelligent caching**: Logs successful downloads to `downloaded/successful_downloads.txt`
+  - Fast resume on interruption (reads cache file in seconds vs scanning millions of files)
+  - Thread-safe logging for concurrent downloads
+  - See [CACHE_USAGE.md](CACHE_USAGE.md) for details
 - Saves to `downloaded/` directory: `siteInfo_{lon}_{lat}.xml` and `species_{lon}_{lat}.xml`
-- Skips already-downloaded files to avoid redundant API calls
+- Skips already-downloaded coordinates based on cache file
 - Requires valid API key in `FULLCAM_API_KEY` environment variable
 - Note: This is a long-running script for large-scale spatial modeling (thousands of locations)
 
@@ -346,14 +360,32 @@ python tools/copy_files.py
 - Skips files that already exist in destination
 - Edit `dir_from` and `dir_to` variables in script to change source/destination paths
 
+**Rebuild cache file (if needed):**
+```bash
+python tools/cache_manager.py rebuild
+```
+- Scans `downloaded/` directory and recreates `successful_downloads.txt`
+- Use when: cache file deleted, manually copied files, or cache corrupted
+- One-time slow operation (scans all files), but cache provides fast startup afterward
+
+**Verify cache integrity:**
+```bash
+python tools/cache_manager.py verify
+```
+- Checks that all files in cache actually exist on disk
+- Reports missing files and cache statistics
+- Use for diagnostics or after moving files between systems
+
 ### File Locations
 
 **Downloaded API cache:** `downloaded/` directory contains thousands of XML files (siteInfo and species data)
+**Cache index:** `downloaded/successful_downloads.txt` tracks all successfully downloaded files
+**Simulation results:** `downloaded/simulation/df_{lat}_{lon}.csv` contains carbon stock/flux time series per location
 **Template XML files:** `data/` directory contains dataholder_*.xml templates used by section functions
 **Documentation:** `tools/` directory contains FullCAM documentation HTML and helper scripts
 **PLO generation library:** `tools/plo_section_functions.py` contains all section creation functions
+**Cache management:** `tools/cache_manager.py` provides cache rebuild and verification utilities
 **Generated PLO files:** Created in-memory by `assemble_plo_sections()` (save to file if needed)
-**Simulation results:** `data/plot_simulation_response.csv` contains carbon stock/flux time series
 
 ## Important Implementation Details
 
