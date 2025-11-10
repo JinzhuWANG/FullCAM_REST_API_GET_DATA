@@ -1,0 +1,12 @@
+# Exclude downloaded API cache directory (contains thousands of XML files)
+downloaded/
+
+# Exclude Python cache
+__pycache__/
+
+# Exclude temporary/generated files
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.pkl

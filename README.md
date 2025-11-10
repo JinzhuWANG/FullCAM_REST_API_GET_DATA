@@ -4,14 +4,53 @@ Python toolkit for interacting with the FullCAM (Full Carbon Accounting Model) R
 
 ## Overview
 
-**FullCAM** is Australia's official carbon accounting model maintained by the Department of Climate Change, Energy, the Environment and Water (DCCEEW). This repository provides tools to:
+**FullCAM** is Australia's official carbon accounting model maintained by the Department of Climate Change, Energy, the Environment and Water (DCCEEW).
 
-- Fetch site data, climate time series, and species information from the FullCAM API
-- Programmatically generate PLO files from scratch or using API data
-- Submit PLO files for simulation and retrieve carbon stock/flux results
-- Parse and analyze simulation outputs
+**What this toolkit does:**
+- Fetches site data, climate time series, and species information from the FullCAM API
+- Generates PLO (Plot) files programmatically for carbon accounting simulations
+- Submits PLO files for simulation and retrieves carbon stock/flux results
+- Provides intelligent caching for large-scale spatial modeling (thousands of locations)
+
+**Typical Workflow:**
+1. Run `get_data.py` once to download and cache data for all Australian locations
+2. Use `assemble_plo_sections(lon, lat, year_start)` to generate PLO files from cached data
+3. Submit PLO files to FullCAM Simulator API to get carbon stock/flux time series
+4. Analyze results (CSV output with annual/monthly carbon stocks)
+
+**Target Users:** Researchers, policy analysts, and developers working with Australia's carbon accounting systems for forestry and land use sectors.
 
 ## Quick Start
+
+### Quick Reference
+
+**Most common operations:**
+
+```python
+# 1. Generate PLO file from cached data
+from tools.plo_section_functions import assemble_plo_sections
+plo_xml = assemble_plo_sections(lon=148.16, lat=-35.61, year_start=2010)
+
+# 2. Save PLO to file
+with open("my_plot.plo", "w", encoding="utf-8") as f:
+    f.write(plo_xml)
+
+# 3. Run simulation via API
+import requests, os
+response = requests.post(
+    "https://api.climatechange.gov.au/climate/carbon-accounting/2024/plot/v1/2024/fullcam-simulator/run-plotsimulation",
+    files={'file': ('plot.plo', plo_xml)},
+    headers={"Ocp-Apim-Subscription-Key": os.getenv("FULLCAM_API_KEY")}
+)
+
+# 4. Parse results
+import pandas as pd
+from io import StringIO
+results_df = pd.read_csv(StringIO(response.text))
+print(results_df[['Year', 'TotalC_tCha']].head())
+```
+
+**See [get_PLO.py](get_PLO.py) for complete working example.**
 
 ### Prerequisites
 
@@ -129,9 +168,11 @@ print(results_df[['Year', 'TotalC_tCha']].head())
 .
 ├── get_data.py                                 # Bulk API data download (Australian coordinates)
 ├── get_PLO.py                                  # PLO generation and simulation workflow
+├── convert_data2tif.py                         # Helper script for converting data to raster format
 ├── README.md                                   # User documentation (this file)
 ├── CLAUDE.md                                   # Developer guide for Claude Code
-├── .gitignore                                  # Git ignore patterns
+├── .gitignore                                  # Git ignore patterns (excludes downloaded/, __pycache__)
+├── .claudeignore                               # Claude Code ignore patterns (reduces context usage)
 ├── data/                                       # Template XML files and example data
 │   ├── dataholder_*.xml                        # XML templates for PLO sections (8 files)
 │   ├── E_globulus_2024.plo                     # Example Eucalyptus plot
@@ -140,7 +181,7 @@ print(results_df[['Year', 'TotalC_tCha']].head())
 │   ├── siteinfo_response.xml                   # Example API response (site info)
 │   ├── species_response.xml                    # Example API response (species)
 │   └── single_template_response.xml            # Example API response (template)
-├── downloaded/                                 # Cached API responses (thousands of files)
+├── downloaded/                                 # Cached API responses (thousands of files, excluded from git)
 │   ├── siteInfo_{lon}_{lat}.xml                # Climate, soil, FPI data per location
 │   ├── species_{lon}_{lat}.xml                 # Species parameters per location
 │   ├── df_{lat}_{lon}.csv                      # Carbon stock/flux time series per location
@@ -152,6 +193,40 @@ print(results_df[['Year', 'TotalC_tCha']].head())
     ├── FullCAM_Documentation_Complete.html     # Official FullCAM docs
     └── get_fullcam_help.py                     # Documentation helper script
 ```
+
+**Note:** The `downloaded/` directory contains thousands of XML files and is excluded from version control. The intelligent caching system uses `successful_downloads.txt` to track what's been downloaded, enabling fast resume on interruption.
+
+### Caching System Benefits
+
+The repository implements an intelligent caching system with significant performance benefits:
+
+**Cache Index File:** `downloaded/successful_downloads.txt`
+- Plain text file listing all successfully downloaded files (one per line)
+- Thread-safe append operations for concurrent downloads
+- Fast startup: Reading cache file takes seconds vs scanning millions of files (minutes/hours)
+
+**Performance Comparison:**
+
+| Operation | Without Cache | With Cache |
+|-----------|---------------|------------|
+| Check 100k files | ~5-10 minutes (file system scan) | ~1 second (text file read) |
+| Resume after crash | Re-scan entire directory | Instant (read cache file) |
+| Parallel downloads | Race conditions possible | Thread-safe logging |
+
+**Cache Management:**
+```bash
+# Rebuild cache from existing files (if cache deleted/corrupted)
+python tools/cache_manager.py rebuild
+
+# Verify cache integrity (check all cached files exist)
+python tools/cache_manager.py verify
+```
+
+**When cache helps:**
+- Large-scale downloads (thousands of locations)
+- Interrupted downloads (network issues, crashes)
+- Frequent script restarts during development
+- Copying files between systems (rebuild cache after transfer)
 
 ### Module Responsibilities
 

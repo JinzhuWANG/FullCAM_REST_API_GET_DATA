@@ -2,6 +2,31 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project Summary
+
+**Quick Context for Claude Code:**
+
+This is a Python toolkit for Australia's FullCAM (Full Carbon Accounting Model) REST API. The codebase has three main components:
+
+1. **`get_data.py`** - Bulk downloader (35 parallel threads, exponential backoff retry, intelligent caching)
+2. **`tools/plo_section_functions.py`** - PLO file generator (13 section creation functions + assembly function)
+3. **`get_PLO.py`** - End-to-end workflow example (generate PLO → simulate → save results)
+
+**Most Common Task:** Users want to generate PLO files from cached data:
+```python
+from tools.plo_section_functions import assemble_plo_sections
+plo_xml = assemble_plo_sections(lon=148.16, lat=-35.61, year_start=2010)
+```
+
+**Key Implementation Details:**
+- All section functions return XML fragments (no `<?xml?>` declaration)
+- Boolean attributes use strings: `"true"/"false"` not Python booleans
+- Data loaded from `downloaded/siteInfo_{lon}_{lat}.xml` and `downloaded/species_{lon}_{lat}.xml`
+- Cache index at `downloaded/successful_downloads.txt` enables fast startup
+- API key stored in `FULLCAM_API_KEY` environment variable (never hardcode)
+
+**Documentation Reference:** [tools/FullCAM_Documentation_Complete.html](tools/FullCAM_Documentation_Complete.html) contains authoritative parameter specifications.
+
 ## Project Overview
 
 This repository provides tools for interacting with the **FullCAM (Full Carbon Accounting Model) REST API** and programmatically generating **PLO (Plot) files** for carbon accounting simulations in forestry and land use sectors.
@@ -10,6 +35,38 @@ This repository provides tools for interacting with the **FullCAM (Full Carbon A
 1. Fetching site data, climate time series, and templates from the FullCAM API
 2. Programmatically assembling PLO files from scratch or API data
 3. Running plot simulations via the FullCAM Simulator API
+
+## Claude Code Configuration
+
+### Context Optimization
+
+The repository includes a [.claudeignore](.claudeignore) file to exclude large directories from Claude Code's context:
+
+```
+# Exclude downloaded API cache directory (contains thousands of XML files)
+downloaded/
+
+# Exclude Python cache
+__pycache__/
+
+# Exclude temporary/generated files
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.pkl
+```
+
+**Why this matters:**
+- The `downloaded/` directory contains thousands of XML files (siteInfo and species data)
+- Including these in context would consume excessive tokens and slow down responses
+- The cache index file (`downloaded/successful_downloads.txt`) provides all necessary metadata
+- Individual cached files can still be accessed when needed via direct file reads
+
+**When to update .claudeignore:**
+- Adding new large data directories
+- Excluding generated output files (CSV results, plots, etc.)
+- Preventing sensitive files from being included in context
 
 ## FullCAM Documentation
 
@@ -89,9 +146,11 @@ The codebase consists of three primary Python modules with distinct responsibili
 .
 ├── get_data.py                                 # Bulk API data download script (Australian coordinates)
 ├── get_PLO.py                                  # PLO generation and simulation workflow
+├── convert_data2tif.py                         # Helper script for converting data to raster format
 ├── README.md                                   # User-facing documentation
 ├── CLAUDE.md                                   # Developer guide (this file)
-├── .gitignore                                  # Git ignore patterns
+├── .gitignore                                  # Git ignore patterns (excludes downloaded/, __pycache__)
+├── .claudeignore                               # Claude Code ignore patterns (excludes downloaded/, __pycache__)
 ├── data/                                       # Template XML files and example data
 │   ├── dataholder_site.xml                     # Site section template
 │   ├── dataholder_soil.xml                     # Soil section template
@@ -120,6 +179,8 @@ The codebase consists of three primary Python modules with distinct responsibili
     └── get_fullcam_help.py                     # Helper script for documentation
 
 ```
+
+**Note:** The `downloaded/` directory is excluded from both git (via `.gitignore`) and Claude Code context (via `.claudeignore`) because it contains thousands of XML files that would consume excessive storage and context tokens.
 
 ### PLO Generation Approach
 
@@ -763,20 +824,29 @@ pip install requests lxml pandas rioxarray xarray numpy joblib tqdm scandir_rs
 
 ## API Key Configuration
 
-**The API key is stored in the `FULLCAM_API_KEY` environment variable.** This is configured as a Windows user environment variable.
+**Security Best Practice:** The API key is stored in the `FULLCAM_API_KEY` environment variable, not hardcoded in source files.
 
 **Setup:**
-- Windows: The user variable `FULLCAM_API_KEY` is already configured with value `50b1d2f22cb34a3eb0d76391f6ce59cb`
-- Linux/Mac: Add `export FULLCAM_API_KEY="your_key"` to `.bashrc` or `.zshrc`
-- For new users, obtain API key from DCCEEW API portal
+- **Windows:** User environment variable `FULLCAM_API_KEY` is already configured
+- **Linux/Mac:** Add `export FULLCAM_API_KEY="your_key"` to `.bashrc` or `.zshrc`
+- **New users:** Obtain API key from DCCEEW API portal
 
 **In code:**
 ```python
 import os
 API_KEY = os.getenv("FULLCAM_API_KEY")
+if not API_KEY:
+    raise ValueError("FULLCAM_API_KEY environment variable not set")
 ```
 
-The `get_data.py` script includes error handling that raises a `ValueError` if the environment variable is not set.
+**Important Security Notes:**
+1. Never commit API keys to git (use environment variables)
+2. Never include API keys in code comments or print statements
+3. The `.gitignore` file is configured to exclude any potential credential files
+4. If API key is accidentally exposed, contact DCCEEW immediately for rotation
+5. API keys have rate limits - avoid sharing keys between projects/users
+
+The `get_data.py` script includes error handling that raises a `ValueError` if the environment variable is not set, preventing accidental execution without credentials.
 
 ## License and Attribution
 
