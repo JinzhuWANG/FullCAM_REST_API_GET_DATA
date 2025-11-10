@@ -114,20 +114,12 @@ def get_species(lat, lon, try_number=8, download_records='downloaded/successful_
 
 
 def get_plot_simulation(lon, lat, url, headers,  try_number=5, timeout=60, download_records='downloaded/successful_downloads.txt'):
-    
-    # Assemble PLO sections, only trying once here to redownload missing data
-    try:
-        plo_str = assemble_plo_sections(lon, lat, 2010)
-    except Exception as e:
-        get_siteinfo(lat, lon)
-        get_species(lat, lon)
-    
-    if plo_str is None:
-        plo_str = assemble_plo_sections(lon, lat, 2010)
-    
+
     # Re-attempt assembly after redownloading
     for attempt in range(try_number):
         try:
+            plo_str = assemble_plo_sections(lon, lat, 2010)
+            
             response = requests.post(
                 url, 
                 files={'file': ('my_plo.plo', plo_str)}, 
