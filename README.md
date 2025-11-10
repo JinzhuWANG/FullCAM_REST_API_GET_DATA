@@ -143,9 +143,8 @@ print(results_df[['Year', 'TotalC_tCha']].head())
 ├── downloaded/                                 # Cached API responses (thousands of files)
 │   ├── siteInfo_{lon}_{lat}.xml                # Climate, soil, FPI data per location
 │   ├── species_{lon}_{lat}.xml                 # Species parameters per location
-│   ├── successful_downloads.txt                # Cache index tracking all successful downloads
-│   └── simulation/                             # Simulation results
-│       └── df_{lat}_{lon}.csv                  # Carbon stock/flux time series per location
+│   ├── df_{lat}_{lon}.csv                      # Carbon stock/flux time series per location
+│   └── successful_downloads.txt                # Cache index tracking all successful downloads
 └── tools/                                      # PLO generation library and utilities
     ├── plo_section_functions.py                # Complete PLO file generation module
     ├── cache_manager.py                        # Cache file management utilities

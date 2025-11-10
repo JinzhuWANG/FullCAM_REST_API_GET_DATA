@@ -110,9 +110,8 @@ The codebase consists of three primary Python modules with distinct responsibili
 ├── downloaded/                                 # Cached API responses for all Australian locations
 │   ├── siteInfo_{lon}_{lat}.xml                # Climate, soil, FPI data (thousands of files)
 │   ├── species_{lon}_{lat}.xml                 # Species parameters (thousands of files)
-│   ├── successful_downloads.txt                # Cache file tracking all successful downloads
-│   └── simulation/                             # Simulation results
-│       └── df_{lat}_{lon}.csv                  # Carbon stock/flux time series per location
+│   ├── df_{lat}_{lon}.csv                      # Carbon stock/flux time series per location
+│   └── successful_downloads.txt                # Cache file tracking all successful downloads
 └── tools/                                      # PLO generation library and utilities
     ├── plo_section_functions.py                # Complete PLO file generation module
     ├── cache_manager.py                        # Cache file management utilities
@@ -380,7 +379,7 @@ python tools/cache_manager.py verify
 
 **Downloaded API cache:** `downloaded/` directory contains thousands of XML files (siteInfo and species data)
 **Cache index:** `downloaded/successful_downloads.txt` tracks all successfully downloaded files
-**Simulation results:** `downloaded/simulation/df_{lat}_{lon}.csv` contains carbon stock/flux time series per location
+**Simulation results:** `downloaded/df_{lat}_{lon}.csv` contains carbon stock/flux time series per location
 **Template XML files:** `data/` directory contains dataholder_*.xml templates used by section functions
 **Documentation:** `tools/` directory contains FullCAM documentation HTML and helper scripts
 **PLO generation library:** `tools/plo_section_functions.py` contains all section creation functions
