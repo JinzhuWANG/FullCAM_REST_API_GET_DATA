@@ -1,0 +1,24 @@
+<PAMDataset>
+  <Metadata domain="Esri">
+    <MDI key="PyramidResamplingType">NEAREST</MDI>
+  </Metadata>
+  <PAMRasterBand band="1">
+    <Histograms>
+      <HistItem>
+        <HistMin>-1.482758620689655</HistMin>
+        <HistMax>27.48275862068965</HistMax>
+        <BucketCount>29</BucketCount>
+        <IncludeOutOfRange>0</IncludeOutOfRange>
+        <Approximate>0</Approximate>
+        <HistCounts>2737674|117|324423|642609|274|5698|25966|1645|1920|17696|552|1451|27|185|785|207275|225379|446|4654|6612|1129|430|230|111771|2397890|1409|194009|22429|21722</HistCounts>
+      </HistItem>
+    </Histograms>
+    <Metadata>
+      <MDI key="STATISTICS_MAXIMUM">27</MDI>
+      <MDI key="STATISTICS_MEAN">9.9777508705284</MDI>
+      <MDI key="STATISTICS_MINIMUM">-1</MDI>
+      <MDI key="STATISTICS_STDDEV">11.290234871134</MDI>
+      <MDI key="STATISTICS_VALID_PERCENT">50.8</MDI>
+    </Metadata>
+  </PAMRasterBand>
+</PAMDataset>
