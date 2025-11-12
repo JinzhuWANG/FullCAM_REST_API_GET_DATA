@@ -2,4 +2,5 @@
 __pycache__/
 downloaded/
 data/plot_simulation_response.csv
+data/processed/
 files.pkl
