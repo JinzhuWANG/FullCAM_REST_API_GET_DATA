@@ -48,3 +48,35 @@ tasks = [
 for _ in tqdm(Parallel(n_jobs=35,  backend='threading', return_as='generator_unordered')(tasks), total=len(tasks)):
     pass
 
+
+
+
+# ------------------ Test the difference between PLO_code and PLO_update ------------------
+import requests
+from io import StringIO
+import pandas as pd
+
+BASE_URL_SIM = "https://api.climatechange.gov.au/climate/carbon-accounting/2024/plot/v1"
+BASE_URL_DATA = "https://api.dcceew.gov.au/climate/carbon-accounting/2024/data/v1"
+
+url_sim = f"{BASE_URL_SIM}/2024/fullcam-simulator/run-plotsimulation"
+url_data = f"{BASE_URL_DATA}/2024/data-builder/update-spatialdata"
+headers = {"Ocp-Apim-Subscription-Key": API_KEY}
+
+# Assemble PLO code
+lon, lat = 140.05, -25.49
+plo_code = assemble_plo_sections(lon, lat, 2010)
+
+print(plo_code)
+
+response_code = requests.post(
+    url_sim, 
+    files={'file': ('my_plo.plo', plo_code)}, 
+    headers=headers,  
+    timeout=30
+)
+
+pd.read_csv(StringIO(response_code.text))
+
+
+

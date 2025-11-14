@@ -1,4 +1,5 @@
 import os
+import requests
 import rioxarray as rio
 import xarray as xr
 import numpy as np
@@ -20,6 +21,8 @@ import os
 os.environ["FULLCAM_API_KEY"] = "your_api_key_here"
 '''
 
+RES_factor = 10
+
 API_KEY = os.getenv("FULLCAM_API_KEY")
 if not API_KEY: raise ValueError("`FULLCAM_API_KEY`environment variable not set!")
 
@@ -28,39 +31,37 @@ if not os.path.exists('downloaded'):
     os.makedirs('downloaded')
 
 # Get all lon/lat for Australia; the raster used is taken from the template of LUTO
-Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True).compute() >= 0 # >=0 only includes LUTO study area
+Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True).compute() >= -1 # >=1 means the continental Australia 
 lon_lat = Aus_xr.to_dataframe(name='mask').reset_index()[['y', 'x', 'mask']].round({'x':2, 'y':2})
 lon_lat['cell_idx'] = range(len(lon_lat))
 
-
 Aus_cell = xr.DataArray(np.arange(Aus_xr.size).reshape(Aus_xr.shape), coords=Aus_xr.coords, dims=Aus_xr.dims)
-Aus_cell_RES5 = Aus_cell.coarsen(x=5, y=5, boundary='trim').max()
-Aus_cell_RES5_df = Aus_cell_RES5.to_dataframe(name='cell_idx').reset_index()[['y', 'x', 'cell_idx']]
-
+Aus_cell_RES = Aus_cell.coarsen(x=RES_factor, y=RES_factor, boundary='trim').max()
+Aus_cell_RES_df = Aus_cell_RES.to_dataframe(name='cell_idx').reset_index()[['y', 'x', 'cell_idx']]
 
 scrap_coords = lon_lat\
     .query('mask == True')\
-    .loc[lon_lat['cell_idx'].isin(Aus_cell_RES5_df['cell_idx'])]
+    .loc[lon_lat['cell_idx'].isin(Aus_cell_RES_df['cell_idx'])]
     
 
 # Load existing downloaded files from cache
 # If cache missing, will prompt to rebuild from existing files or start fresh
-existing_siteinfo, existing_species, _ = get_existing_downloads()
-scrap_coords_siteinfo = scrap_coords[~scrap_coords.set_index(['y', 'x']).index.isin(existing_siteinfo)].reset_index(drop=True)
-scrap_coords_species = scrap_coords[~scrap_coords.set_index(['y', 'x']).index.isin(existing_species)].reset_index(drop=True)
+existing_siteinfo, existing_species, existing_dfs = get_existing_downloads()
+scrap_coords_siteinfo = scrap_coords[~scrap_coords.set_index(['x', 'y']).index.isin(existing_siteinfo)].reset_index(drop=True)
+scrap_coords_species = scrap_coords[~scrap_coords.set_index(['x', 'y']).index.isin(existing_species)].reset_index(drop=True)
+
 
 
 # ----------------------- SiteInfo --------------------------
 if __name__ == "__main__":
     # Create tasks for parallel processing
     tasks = [delayed(get_siteinfo)(lat, lon) 
-            for lat, lon in tqdm(zip(scrap_coords_siteinfo['y'], scrap_coords_siteinfo['x']), total=len(scrap_coords_siteinfo))
+            for  lon, lat in tqdm(zip(scrap_coords_siteinfo['y'], scrap_coords_siteinfo['x']), total=len(scrap_coords_siteinfo))
     ]
 
     for rtn in tqdm(Parallel(n_jobs=35,  backend='threading', return_as='generator_unordered')(tasks), total=len(tasks)):
         if rtn is not None:
             print(rtn)
-    
 
 
 # ----------------------- Species --------------------------
@@ -74,9 +75,6 @@ if __name__ == "__main__":
         if rtn is not None:
             print(rtn)
 
-    
-    
-    
     
 # # ----------------------- Regimes --------------------------
 # ENDPOINT = "/2024/data-builder/regimes"
@@ -125,16 +123,17 @@ if __name__ == "__main__":
 
 
 # # ----------------------- Update PLO --------------------------  
-# ENDPOINT = "/2024/data-builder/convert-plotfile"
-# url = f"{BASE_URL_DATA}{ENDPOINT}"
+BASE_URL_DATA = "https://api.dcceew.gov.au/climate/carbon-accounting/2024/data/v1"
+ENDPOINT = "/2024/data-builder/convert-plotfile"
+url = f"{BASE_URL_DATA}{ENDPOINT}"
 
-# with open("data/E_globulus_2024.plo", 'rb') as file:
-#     file_data = file.read()
+with open("data/E_globulus_2024.plo", 'rb') as file:
+    file_data = file.read()
 
-# response = requests.post(url, files={'file': ('test.plo', file_data)}, headers={"Ocp-Apim-Subscription-Key": API_KEY},  timeout=30)
+response = requests.post(url, files={'file': ('test.plo', file_data)}, headers={"Ocp-Apim-Subscription-Key": API_KEY},  timeout=30)
 
-# with open('data/updated_plotfile_response.xml', 'wb') as f:
-#     f.write(response.content)
+with open('data/updated_plotfile_response.xml', 'wb') as f:
+    f.write(response.content)
 
 
 

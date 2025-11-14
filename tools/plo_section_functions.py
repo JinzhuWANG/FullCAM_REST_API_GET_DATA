@@ -40,7 +40,7 @@ def get_siteinfo(lat, lon, try_number=8, download_records='downloaded/successful
     PARAMS = {
         "latitude": lat,
         "longitude": lon,
-        "area": "OneKm",
+        "area": "Cell",
         "plotT": "CompF",
         "frCat": "All",
         "incGrowth": "false",
@@ -62,7 +62,6 @@ def get_siteinfo(lat, lon, try_number=8, download_records='downloaded/successful
                 with _cache_write_lock:
                     with open(download_records, 'a', encoding='utf-8') as cache:
                         cache.write(f'{filename}\n')
-
                 return
             else:
                 # HTTP error - apply backoff before retry
@@ -74,6 +73,8 @@ def get_siteinfo(lat, lon, try_number=8, download_records='downloaded/successful
                 time.sleep(2**attempt)
 
     return f'{lon},{lat}', "Failed"
+
+
 
 def get_species(lat, lon, try_number=8, download_records='downloaded/successful_downloads.txt'):
 
@@ -119,7 +120,7 @@ def get_plot_simulation(lon, lat, url, headers,  try_number=5, timeout=60, downl
     for attempt in range(try_number):
         try:
             plo_str = assemble_plo_sections(lon, lat, 2010)
-            
+                        
             response = requests.post(
                 url, 
                 files={'file': ('my_plo.plo', plo_str)}, 
@@ -129,11 +130,12 @@ def get_plot_simulation(lon, lat, url, headers,  try_number=5, timeout=60, downl
 
             if response.status_code == 200:
                 response_df = pd.read_csv(StringIO(response.text))
-                response_df.to_csv(f'downloaded/df_{lat}_{lon}.csv', index=False)
+                response_df.to_csv(f'downloaded/df_{lon}_{lat}.csv', index=False)
+                
                 # Add the record to cache file
                 with _cache_write_lock:
                     with open(download_records, 'a', encoding='utf-8') as cache:
-                        cache.write(f'df_{lat}_{lon}.csv\n')
+                        cache.write(f'df_{lon}_{lat}.csv\n')
                 return 
             else:
                 # HTTP error - apply backoff before retry
@@ -1363,13 +1365,13 @@ def create_init_section(lon: float, lat: float, tsmd_year: int = 2010):
     initTotalC = float(locn_soil.get('initTotalC'))
     
     # Calculate soil carbon pool values (tonnes C/ha)
-    dpmaCMInitF = initFracDpma * initTotalC
-    rpmaCMInitF = initFracRpma * initTotalC
     biofCMInitF = initFracBiof * initTotalC
     biosCMInitF = initFracBios * initTotalC
+    dpmaCMInitF = initFracDpma * initTotalC
+    rpmaCMInitF = initFracRpma * initTotalC
     humsCMInitF = initFracHums * initTotalC
-    inrtCMInitF = initFracInrt * initTotalC
-    
+    inrtCMInitF = initFracInrt * initTotalC  
+      
     # Extract TSMD time series and get value for specified year
     tsmd_elem = site_root.xpath(".//TimeSeries[@tInTS='initTSMD']")[0]
     yr0TS = int(tsmd_elem.get('yr0TS'))  # Start year (e.g., 1970)

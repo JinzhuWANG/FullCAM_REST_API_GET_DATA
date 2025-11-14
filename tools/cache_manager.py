@@ -51,26 +51,27 @@ def load_cache(cache_file: str = 'downloaded/successful_downloads.txt') -> Tuple
                 match = lon_lat_reg_xml.findall(line)
                 if match:
                     lon, lat = match[0]
-                    existing_siteinfo.append((float(lat), float(lon)))
+                    existing_siteinfo.append((float(lon), float(lat)))
             elif line.startswith('species_'):
                 match = lon_lat_reg_xml.findall(line)
                 if match:
                     lon, lat = match[0]
-                    existing_species.append((float(lat), float(lon)))
+                    existing_species.append((float(lon), float(lat)))
             elif line.startswith('df_'):
                 match = lon_lat_reg_csv.findall(line)
                 if match:
-                    lat, lon = match[0]
-                    existing_dfs.append((float(lat), float(lon)))
+                    lon, lat = match[0]
+                    existing_dfs.append((float(lon), float(lat)))
 
     print(f"Loaded {len(existing_siteinfo):,} siteInfo, {len(existing_species):,} species, and {len(existing_dfs):,} df entries from cache")
 
     return existing_siteinfo, existing_species, existing_dfs
 
 
-def rebuild_cache(downloaded_dir: str = 'downloaded',
-                  cache_file: str = 'downloaded/successful_downloads.txt',
-                 ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]], List[Tuple[float, float]]]:
+def rebuild_cache(
+    downloaded_dir: str = 'downloaded',
+    cache_file: str = 'downloaded/successful_downloads.txt',
+) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]], List[Tuple[float, float]]]:
     """
     Rebuild cache by scanning downloaded/ directory.
 
@@ -111,6 +112,7 @@ def rebuild_cache(downloaded_dir: str = 'downloaded',
     siteinfo_files = []
     species_files = []
     df_files = []
+    
     existing_siteinfo = []
     existing_species = []
     existing_dfs = []
@@ -156,9 +158,11 @@ def rebuild_cache(downloaded_dir: str = 'downloaded',
     return existing_siteinfo, existing_species, existing_dfs
 
 
-def get_existing_downloads(cache_file: str = 'downloaded/successful_downloads.txt',
-                           downloaded_dir: str = 'downloaded',
-                           auto_rebuild: bool = True) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]], List[Tuple[float, float]]]:
+def get_existing_downloads(
+    cache_file: str = 'downloaded/successful_downloads.txt',
+    downloaded_dir: str = 'downloaded',
+    auto_rebuild: bool = True
+) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]], List[Tuple[float, float]]]:
     """
     Get existing downloads from cache, rebuilding if necessary.
 

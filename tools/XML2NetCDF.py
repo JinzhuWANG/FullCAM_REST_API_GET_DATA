@@ -4,7 +4,6 @@ import xarray as xr
 import numpy as np
 
 from lxml import etree
-from tools.plo_section_functions import get_siteinfo
 
 
 
@@ -16,13 +15,12 @@ def get_siteinfo_data(lon:float, lat:float) -> dict:
     # Check if file exists
     filepath = f'downloaded/siteinfo_{lon}_{lat}.xml'
     if not os.path.exists(filepath):
-        print(f"File not found: {filepath}. Downloading...")
-        get_siteinfo(lat, lon)
+        print(f"File not found: {filepath}. Returning None.")
+        return None
     
     
     # Parse DATA-API response to get TimeSeries data
     site_root = etree.parse(filepath).getroot()
-
 
     # Get avgAirTemp TimeSeries
     api_avgAirTemp = site_root.xpath('.//*[@tInTS="avgAirTemp"]')[0]
