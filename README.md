@@ -181,6 +181,10 @@ print(results_df[['Year', 'TotalC_tCha']].head())
 │   ├── siteinfo_response.xml                   # Example API response (site info)
 │   ├── species_response.xml                    # Example API response (species)
 │   └── single_template_response.xml            # Example API response (template)
+├── docs/                                       # Documentation resources
+│   ├── FullCAM_Documentation_Complete.html     # Official FullCAM parameter documentation
+│   ├── FullCAM Databuilder API Documentation v0.1 DRAFT.pdf  # API documentation
+│   └── TR12 Pre-Clearing Soil Carbon Levels in Australia.pdf  # Soil carbon reference
 ├── downloaded/                                 # Cached API responses (thousands of files, excluded from git)
 │   ├── siteInfo_{lon}_{lat}.xml                # Climate, soil, FPI data per location
 │   ├── species_{lon}_{lat}.xml                 # Species parameters per location
@@ -190,7 +194,6 @@ print(results_df[['Year', 'TotalC_tCha']].head())
     ├── plo_section_functions.py                # Complete PLO file generation module
     ├── cache_manager.py                        # Cache file management utilities
     ├── copy_files.py                           # Utility to copy downloaded files between directories
-    ├── FullCAM_Documentation_Complete.html     # Official FullCAM docs
     └── get_fullcam_help.py                     # Documentation helper script
 ```
 
@@ -416,7 +419,7 @@ print(f"Simulation complete. Total carbon at year 2100: {results_df.iloc[-1]['To
 
 **For detailed parameter specifications and model configuration:**
 
-See [tools/FullCAM_Documentation_Complete.html](tools/FullCAM_Documentation_Complete.html) for comprehensive documentation including:
+See [docs/FullCAM_Documentation_Complete.html](docs/FullCAM_Documentation_Complete.html) for comprehensive documentation including:
 - Complete PLO XML schema
 - Parameter descriptions and valid ranges
 - Time series requirements

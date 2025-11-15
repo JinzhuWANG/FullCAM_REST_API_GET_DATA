@@ -27,25 +27,48 @@ BASE_URL_SIM = "https://api.climatechange.gov.au/climate/carbon-accounting/2024/
 ENDPOINT = "/2024/fullcam-simulator/run-plotsimulation"
 
 
+# ------------ Get resfactored coords --------------
+RES_factor = 1
+
+API_KEY = os.getenv("FULLCAM_API_KEY")
+
+if not API_KEY: 
+    raise ValueError("`FULLCAM_API_KEY`environment variable not set!")
+
+if not os.path.exists('downloaded'): 
+    os.makedirs('downloaded')
+
+# Get all lon/lat for Australia; the raster used is taken from the template of LUTO
+Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True).compute() >= -1 # >=1 means the continental Australia 
+lon_lat = Aus_xr.to_dataframe(name='mask').reset_index()[['y', 'x', 'mask']].round({'x':2, 'y':2})
+lon_lat['cell_idx'] = range(len(lon_lat))
+
+Aus_cell = xr.DataArray(np.arange(Aus_xr.size).reshape(Aus_xr.shape), coords=Aus_xr.coords, dims=Aus_xr.dims)
+Aus_cell_RES = Aus_cell.coarsen(x=RES_factor, y=RES_factor, boundary='trim').max()
+Aus_cell_RES_df = Aus_cell_RES.to_dataframe(name='cell_idx').reset_index()[['y', 'x', 'cell_idx']]
+
+scrap_coords = lon_lat\
+    .query('mask == True')\
+    .loc[lon_lat['cell_idx'].isin(Aus_cell_RES_df['cell_idx'])]
+    
+RES_factor_coords = scrap_coords.set_index(['x', 'y']).index.tolist()
+
+
 # ----------- Get downloaded files --------------
 existing_siteinfo, existing_species, existing_dfs = get_existing_downloads()
-existing_data_coords = set(existing_siteinfo).intersection(set(existing_species))
-existing_CSV_coords = set(existing_dfs)
-to_request_coords = existing_data_coords - existing_CSV_coords
+to_request_coords = set(RES_factor_coords) - set(existing_dfs)
 
 
 # ----------------------- Plot simulation --------------------------
-if not os.path.exists('downloaded'): os.makedirs('downloaded')
-
 url = f"{BASE_URL_SIM}{ENDPOINT}"
 headers = {"Ocp-Apim-Subscription-Key": API_KEY}
 
 tasks = [
     delayed(get_plot_simulation)(lon, lat, url, headers)
-    for lat, lon in tqdm(to_request_coords, total=len(to_request_coords))
+    for lon, lat in tqdm(to_request_coords, total=len(to_request_coords))
 ]
 
-for _ in tqdm(Parallel(n_jobs=35,  backend='threading', return_as='generator_unordered')(tasks), total=len(tasks)):
+for _ in tqdm(Parallel(n_jobs=35, return_as='generator_unordered')(tasks), total=len(tasks)):
     pass
 
 

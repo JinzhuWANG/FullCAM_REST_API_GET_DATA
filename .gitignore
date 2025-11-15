@@ -4,3 +4,4 @@ downloaded/
 data/plot_simulation_response.csv
 data/processed/
 files.pkl
+.claude/settings.local.json

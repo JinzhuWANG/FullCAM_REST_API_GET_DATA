@@ -100,9 +100,9 @@ def get_carbon_data(lon:float, lat:float) -> xr.DataArray:
     '''
     Get carbon stock data from CSV file and return as xarray DataArray.
     '''
-    
+
     # Check if file exists
-    filepath = f'downloaded/df_{lat}_{lon}.csv'
+    filepath = f'downloaded/df_{lon}_{lat}.csv'
     if not os.path.exists(filepath):
         return xr.DataArray(
             np.full((91, 3), np.nan),
@@ -113,12 +113,12 @@ def get_carbon_data(lon:float, lat:float) -> xr.DataArray:
             }
         ).expand_dims(y=[lat], x=[lon])
 
-    df = ( 
-        pd.read_csv(f'downloaded/df_{lat}_{lon}.csv')
+    df = (
+        pd.read_csv(filepath)
         .query('Year >= 2010')
         .drop(columns=['Step In Year', 'Dec. Year'])
         .rename(columns={
-            'Year': 'YEAR', 
+            'Year': 'YEAR',
             'C mass of plants  (tC/ha)': 'TREE_C_HA',
             'C mass of debris  (tC/ha)': 'DEBRIS_C_HA',
             'C mass of soil  (tC/ha)': 'SOIL_C_HA',
@@ -130,7 +130,7 @@ def get_carbon_data(lon:float, lat:float) -> xr.DataArray:
         .set_index(['YEAR', 'VARIABLE'])
         .reindex(
             pd.MultiIndex.from_product(
-                [np.arange(2010, 2101), 
+                [np.arange(2010, 2101),
                  ['DEBRIS_C_HA', 'SOIL_C_HA', 'TREE_C_HA']],
                 names=['YEAR', 'VARIABLE']
             ), fill_value=np.nan
@@ -138,11 +138,11 @@ def get_carbon_data(lon:float, lat:float) -> xr.DataArray:
         .sort_values(['YEAR', 'VARIABLE'])
         .reset_index()
     )
-        
+
     df_xr = (
         xr.DataArray(
         df['value'].values.astype(np.float32).reshape(
-            df['YEAR'].nunique(), 
+            df['YEAR'].nunique(),
             df['VARIABLE'].nunique()),
         coords={
             'YEAR': df['YEAR'].unique(),
@@ -151,7 +151,155 @@ def get_carbon_data(lon:float, lat:float) -> xr.DataArray:
         dims=['YEAR', 'VARIABLE']
         ).expand_dims(y=[lat], x=[lon])
     )
-    
+
     return df_xr
+
+
+
+def get_soilbase_data(lon: float, lat: float) -> dict:
+    """
+    Extract SoilBase information from siteInfo XML file and return as three xarray DataArrays.
+
+    This function extracts soil parameters from the SoilBase section of FullCAM siteInfo XML files.
+    The SoilBase contains three child elements:
+    - SoilZap[@id='forest']: Forest soil parameters (49 numeric attributes)
+    - SoilZap[@id='agriculture']: Agriculture soil parameters (49 numeric attributes)
+    - SoilOther[@id='other']: Common soil properties (3 numeric attributes: clayFrac, bulkDensity, maxASW)
+
+    Note: The tSoil attribute (soil texture type string) is excluded as it's non-numeric.
+
+    Parameters
+    ----------
+    lon : float
+        Longitude coordinate
+    lat : float
+        Latitude coordinate
+
+    Returns
+    -------
+    dict
+        Dictionary containing three xarray DataArrays:
+        - 'forest': Forest soil parameters (y, x, band) where band contains attribute names
+        - 'agriculture': Agriculture soil parameters (y, x, band) where band contains attribute names
+        - 'SoilOther': Common soil properties (y, x, band) where band contains attribute names
+
+        All attributes are numeric (float). Empty string attributes are stored as np.nan.
+        Boolean attributes are converted to 1.0 (true) or 0.0 (false).
+
+    Examples
+    --------
+    >>> soil_data = get_soilbase_data(148.16, -35.61)
+    >>> # Direct access by attribute name
+    >>> clay = soil_data['SoilOther'].sel(band='clayFrac')
+    >>> ph = soil_data['forest'].sel(band='pH')
+    """
+
+    # Check if file exists
+    filepath = f'downloaded/siteinfo_{lon}_{lat}.xml'
+    if not os.path.exists(filepath):
+        print(f"File not found: {filepath}. Returning None.")
+        return None
+
+    # Parse XML file
+    site_root = etree.parse(filepath).getroot()
+
+    # Get SoilBase element
+    soilbase = site_root.find('.//SoilBase')
+    if soilbase is None:
+        print(f"SoilBase element not found in {filepath}. Returning None.")
+        return None
+
+    # Extract SoilZap[@id='forest']
+    forest_elem = soilbase.find("./SoilZap[@id='forest']")
+    forest_attrs = list(forest_elem.attrib.keys()) if forest_elem is not None else []
+    forest_attrs = [attr for attr in forest_attrs if attr != 'id']  # Remove 'id' attribute
+
+    # Extract SoilZap[@id='agriculture']
+    agriculture_elem = soilbase.find("./SoilZap[@id='agriculture']")
+    agriculture_attrs = list(agriculture_elem.attrib.keys()) if agriculture_elem is not None else []
+    agriculture_attrs = [attr for attr in agriculture_attrs if attr != 'id']  # Remove 'id' attribute
+
+    # Extract SoilOther[@id='other']
+    soilother_elem = soilbase.find("./SoilOther[@id='other']")
+    soilother_attrs = list(soilother_elem.attrib.keys()) if soilother_elem is not None else []
+    soilother_attrs = [attr for attr in soilother_attrs if attr not in ['id', 'tSoil']]  # Remove 'id' and 'tSoil' attributes
+
+    # Initialize arrays with np.nan
+    forest_data = np.full((1, 1, len(forest_attrs)), np.nan).astype(np.float32)
+    agriculture_data = np.full((1, 1, len(agriculture_attrs)), np.nan).astype(np.float32)
+    soilother_data = np.full((1, 1, len(soilother_attrs)), np.nan).astype(np.float32)
+
+    # Helper function to convert attribute value to float
+    def convert_to_float(val):
+        """Convert attribute value to float, handling boolean strings."""
+        if val == '':
+            return np.nan
+        elif val.lower() == 'true':
+            return 1.0
+        elif val.lower() == 'false':
+            return 0.0
+        else:
+            try:
+                return float(val)
+            except ValueError:
+                return np.nan
+
+    # Fill forest data
+    if forest_elem is not None:
+        for i, attr in enumerate(forest_attrs):
+            val = forest_elem.get(attr, '')
+            if val != '':
+                forest_data[0, 0, i] = convert_to_float(val)
+
+    # Fill agriculture data
+    if agriculture_elem is not None:
+        for i, attr in enumerate(agriculture_attrs):
+            val = agriculture_elem.get(attr, '')
+            if val != '':
+                agriculture_data[0, 0, i] = convert_to_float(val)
+
+    # Fill SoilOther data (only numeric attributes now)
+    if soilother_elem is not None:
+        for i, attr in enumerate(soilother_attrs):
+            val = soilother_elem.get(attr, '')
+            if val != '':
+                soilother_data[0, 0, i] = convert_to_float(val)
+
+    # Create DataArrays with attribute names as band coordinates
+    forest_da = xr.DataArray(
+        forest_data,
+        dims=['y', 'x', 'band'],
+        coords={
+            'y': [lat],
+            'x': [lon],
+            'band': forest_attrs
+        }
+    )
+
+    agriculture_da = xr.DataArray(
+        agriculture_data,
+        dims=['y', 'x', 'band'],
+        coords={
+            'y': [lat],
+            'x': [lon],
+            'band': agriculture_attrs
+        }
+    )
+
+    soilother_da = xr.DataArray(
+        soilother_data,
+        dims=['y', 'x', 'band'],
+        coords={
+            'y': [lat],
+            'x': [lon],
+            'band': soilother_attrs
+        }
+    )
+
+    return {
+        'forest': forest_da,
+        'agriculture': agriculture_da,
+        'SoilOther': soilother_da
+    }
 
     

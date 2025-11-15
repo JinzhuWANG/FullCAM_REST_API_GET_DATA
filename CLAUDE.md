@@ -25,7 +25,7 @@ plo_xml = assemble_plo_sections(lon=148.16, lat=-35.61, year_start=2010)
 - Cache index at `downloaded/successful_downloads.txt` enables fast startup
 - API key stored in `FULLCAM_API_KEY` environment variable (never hardcode)
 
-**Documentation Reference:** [tools/FullCAM_Documentation_Complete.html](tools/FullCAM_Documentation_Complete.html) contains authoritative parameter specifications.
+**Documentation Reference:** [docs/FullCAM_Documentation_Complete.html](docs/FullCAM_Documentation_Complete.html) contains authoritative parameter specifications.
 
 ## Project Overview
 
@@ -72,7 +72,7 @@ __pycache__/
 
 **For detailed information about FullCAM model parameters, PLO file structure, and configuration options, refer to:**
 
-[tools/FullCAM_Documentation_Complete.html](tools/FullCAM_Documentation_Complete.html)
+[docs/FullCAM_Documentation_Complete.html](docs/FullCAM_Documentation_Complete.html)
 
 This comprehensive HTML documentation contains:
 - Complete PLO file format specifications
@@ -166,6 +166,10 @@ The codebase consists of three primary Python modules with distinct responsibili
 │   ├── siteinfo_response.xml                   # Example API response (site info)
 │   ├── species_response.xml                    # Example API response (species)
 │   └── single_template_response.xml            # Example API response (template)
+├── docs/                                       # Documentation resources
+│   ├── FullCAM_Documentation_Complete.html     # Official FullCAM parameter documentation
+│   ├── FullCAM Databuilder API Documentation v0.1 DRAFT.pdf  # API documentation
+│   └── TR12 Pre-Clearing Soil Carbon Levels in Australia.pdf  # Soil carbon reference
 ├── downloaded/                                 # Cached API responses for all Australian locations
 │   ├── siteInfo_{lon}_{lat}.xml                # Climate, soil, FPI data (thousands of files)
 │   ├── species_{lon}_{lat}.xml                 # Species parameters (thousands of files)
@@ -175,8 +179,7 @@ The codebase consists of three primary Python modules with distinct responsibili
     ├── plo_section_functions.py                # Complete PLO file generation module
     ├── cache_manager.py                        # Cache file management utilities
     ├── copy_files.py                           # Utility to copy downloaded files between directories
-    ├── FullCAM_Documentation_Complete.html     # Official FullCAM docs
-    └── get_fullcam_help.py                     # Helper script for documentation
+    └── get_fullcam_help.py                     # Documentation helper script
 
 ```
 

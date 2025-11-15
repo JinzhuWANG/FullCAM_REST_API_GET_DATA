@@ -1205,10 +1205,10 @@ def create_site_section(
     # Parse DATA-API response to get TimeSeries data
     site_root = etree.parse(file_path).getroot()
 
-    api_avgAirTemp = site_root.xpath('.//*[@tInTS="avgAirTemp"]')[0]
-    api_openPanEvap = site_root.xpath('.//*[@tInTS="openPanEvap"]')[0]
-    api_rainfall = site_root.xpath('.//*[@tInTS="rainfall"]')[0]
-    api_forestProdIx = site_root.xpath('.//*[@tInTS="forestProdIx"]')[0]
+    api_avgAirTemp      = site_root.xpath('.//*[@tInTS="avgAirTemp"]')[0]
+    api_openPanEvap     = site_root.xpath('.//*[@tInTS="openPanEvap"]')[0]
+    api_rainfall        = site_root.xpath('.//*[@tInTS="rainfall"]')[0]
+    api_forestProdIx    = site_root.xpath('.//*[@tInTS="forestProdIx"]')[0]
 
     fpi_values = [float(i) for i in site_root.xpath('.//*[@tInTS="forestProdIx"]//rawTS')[0].text.split(',')]
     fpiAvgLT = str(sum(fpi_values[:48]) / 48)       # fpiAvgLT from first 48 elements (1970-2017)

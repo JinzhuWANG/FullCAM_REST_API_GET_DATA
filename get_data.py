@@ -56,7 +56,7 @@ scrap_coords_species = scrap_coords[~scrap_coords.set_index(['x', 'y']).index.is
 if __name__ == "__main__":
     # Create tasks for parallel processing
     tasks = [delayed(get_siteinfo)(lat, lon) 
-            for  lon, lat in tqdm(zip(scrap_coords_siteinfo['y'], scrap_coords_siteinfo['x']), total=len(scrap_coords_siteinfo))
+            for  lat, lon in tqdm(zip(scrap_coords_siteinfo['y'], scrap_coords_siteinfo['x']), total=len(scrap_coords_siteinfo))
     ]
 
     for rtn in tqdm(Parallel(n_jobs=35,  backend='threading', return_as='generator_unordered')(tasks), total=len(tasks)):
