@@ -54,6 +54,18 @@ print(results_df[['Year', 'TotalC_tCha']].head())
 
 ### Prerequisites
 
+**Python Environment:**
+
+This project uses a specific Python environment:
+```
+F:\jinzhu\conda_env\luto\python.exe
+```
+
+For Claude Code users, this is already configured in `.claude/settings.local.json`. For manual execution, use:
+```bash
+F:\jinzhu\conda_env\luto\python.exe script_name.py
+```
+
 **Install dependencies:**
 ```bash
 pip install requests lxml pandas rioxarray xarray numpy joblib tqdm

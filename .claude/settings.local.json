@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(\"F:\\jinzhu\\conda_env\\luto\\python.exe\" -c:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []

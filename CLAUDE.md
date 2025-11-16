@@ -38,6 +38,24 @@ This repository provides tools for interacting with the **FullCAM (Full Carbon A
 
 ## Claude Code Configuration
 
+### Python Interpreter
+
+This project uses a specific Python environment located at:
+```
+F:\jinzhu\conda_env\luto\python.exe
+```
+
+The Claude Code settings (`.claude/settings.local.json`) are configured to use this interpreter for all Python script execution. This ensures consistent package versions and dependencies across all operations.
+
+**Requirements:**
+- Python environment must have all required dependencies installed (see Dependencies section)
+- Environment should include: `requests`, `lxml`, `pandas`, `rioxarray`, `xarray`, `numpy`, `joblib`, `tqdm`
+
+**To use this interpreter manually:**
+```bash
+F:\jinzhu\conda_env\luto\python.exe script_name.py
+```
+
 ### Context Optimization
 
 The repository includes a [.claudeignore](.claudeignore) file to exclude large directories from Claude Code's context:
