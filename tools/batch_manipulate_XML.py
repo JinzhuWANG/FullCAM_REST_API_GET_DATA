@@ -1,11 +1,16 @@
+import os
 import shutil
-import pickle
 
 from scandir_rs import Scandir
 from pathlib import Path
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 
+from tools.cache_manager import get_existing_downloads
+
+
+
+# ------------------- Copy files --------------------------
 dir_from = "N:/Data-Master/FullCAM/FullCAM_REST_API_GET_DATA_2025/downloaded"
 dir_to = "F:/jinzhu/FullCAM_REST_API_GET_DATA_2025/downloaded"
 
@@ -41,3 +46,29 @@ results = []
 for result in tqdm(Parallel(n_jobs=-1, backend='threading', return_as='generator')(tasks),
                    total=len(tasks), desc="Copying files"):
     results.append(result)
+    
+    
+# ------------------- Delete files --------------------------
+existing_siteinfo, existing_species, existing_dfs = get_existing_downloads()
+
+files_siteinfo = [f'downloaded/siteInfo_{lon}_{lat}.xml' for lon,lat in existing_siteinfo] 
+files_species = [f'downloaded/species_{lon}_{lat}.xml' for lon,lat in existing_species] 
+files_dfs = [f'downloaded/df_{lon}_{lat}.csv' for lon,lat in existing_dfs]
+files_record = ['downloaded/successful_downloads.txt']
+
+rm_files = files_siteinfo + files_dfs + files_record
+
+def rm_file(file:str):
+    try:
+        if os.path.exists(file):
+            os.remove(file)
+    except Exception as e:
+        pass  # Silently ignore errors if file doesn't exist or can't be deleted
+
+tasks = [delayed(rm_file)(file) for file in rm_files]
+for _ in tqdm(Parallel(n_jobs=-1, backend='threading', return_as='generator')(tasks),total=len(tasks), desc="Deleting files"):
+    pass
+
+
+
+

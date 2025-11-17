@@ -8,42 +8,45 @@ from lxml import etree
 
 
 
-def get_siteinfo_data(lon:float, lat:float) -> dict:
+def parse_siteinfo_data(xml_string: str) -> xr.Dataset:
     """
-    Parse siteInfo XML file and return relevant data as a dictionary.
+    Parse siteInfo XML string and return relevant data as xarray Dataset.
+
+    Parameters
+    ----------
+    xml_string : str
+        Raw XML string content from siteInfo API response
+
+    Returns
+    -------
+    xr.Dataset
+        Dataset containing avgAirTemp, openPanEvap, rainfall, forestProdIx, maxAbgMF, and fpiAvgLT
+        without spatial dimensions (year, month only)
     """
-    
-    # Check if file exists
-    filepath = f'downloaded/siteinfo_{lon}_{lat}.xml'
-    if not os.path.exists(filepath):
-        print(f"File not found: {filepath}. Returning None.")
-        return None
-    
-    
-    # Parse DATA-API response to get TimeSeries data
-    site_root = etree.parse(filepath).getroot()
+    # Parse XML string
+    site_root = etree.fromstring(xml_string.encode('utf-8'))
 
     # Get avgAirTemp TimeSeries
-    api_avgAirTemp = site_root.xpath('.//*[@tInTS="avgAirTemp"]')[0]
-    year_start = int(api_avgAirTemp.get('yr0TS'))
-    num_per_year = int(api_avgAirTemp.get('dataPerYrTS'))
-    num_years = int(api_avgAirTemp.get('nYrsTS'))
-    raw_values = np.array(eval(api_avgAirTemp.xpath('.//rawTS')[0].text))
-    
+    api_avgAirTemp  = site_root.xpath('.//*[@tInTS="avgAirTemp"]')[0]
+    year_start      = int(api_avgAirTemp.get('yr0TS'))
+    num_per_year    = int(api_avgAirTemp.get('dataPerYrTS'))
+    num_years       = int(api_avgAirTemp.get('nYrsTS'))
+    raw_values      = np.array(eval(api_avgAirTemp.xpath('.//rawTS')[0].text))
+
     df_arr = xr.Dataset(
         coords={
             'year': np.arange(year_start, year_start + num_years),
             'month': np.arange(1, num_per_year + 1)
         }
     )
-    
+
     df_arr['avgAirTemp'] = xr.DataArray(
         raw_values.reshape(num_years, num_per_year),
         coords=df_arr.coords,
         dims=df_arr.dims
     )
-    
-    
+
+
     # Get openPanEvap TimeSeries
     api_openPanEvap = site_root.xpath('.//*[@tInTS="openPanEvap"]')[0]
     raw_values = np.array(eval(api_openPanEvap.xpath('.//rawTS')[0].text))
@@ -52,8 +55,8 @@ def get_siteinfo_data(lon:float, lat:float) -> dict:
         coords=df_arr.coords,
         dims=df_arr.dims
     )
-    
-    
+
+
     # Get rainfall TimeSeries
     api_rainfall = site_root.xpath('.//*[@tInTS="rainfall"]')[0]
     raw_values = np.array(eval(api_rainfall.xpath('.//rawTS')[0].text))
@@ -62,8 +65,8 @@ def get_siteinfo_data(lon:float, lat:float) -> dict:
         coords=df_arr.coords,
         dims=df_arr.dims
     )
-    
-    
+
+
     # Get forestProdIx TimeSeries
     api_forestProdIx = site_root.xpath('.//*[@tInTS="forestProdIx"]')[0]
     year_start = int(api_forestProdIx.get('yr0TS'))
@@ -75,24 +78,56 @@ def get_siteinfo_data(lon:float, lat:float) -> dict:
         dims=['year'],
         coords={'year': np.arange(year_start, year_start + num_years)}
     )
-    
-    # Expand coords to match other variables
-    df_arr = df_arr.expand_dims(y=[lat], x=[lon])
 
-    # Append static variables
+    # Append static variables (no spatial dimensions yet)
     maxAbgMF = np.array(eval(site_root.xpath('.//*[@tIn="maxAbgMF"]')[0].get('value')))
-    fpiAvgLT = df_arr['forestProdIx'][0,0,:48].mean(dim='year').values  # fpiAvgLT from first 48 elements (1970-2017)
+    fpiAvgLT = df_arr['forestProdIx'][:48].mean(dim='year').values  # fpiAvgLT from first 48 elements (1970-2017)
+    df_arr['maxAbgMF'] = xr.DataArray(maxAbgMF)
+    df_arr['fpiAvgLT'] = xr.DataArray(fpiAvgLT)
+
+    return df_arr
+
+
+def get_siteinfo_data(lon:float, lat:float) -> xr.Dataset:
+    """
+    Load and parse siteInfo XML file for given coordinates.
+
+    Parameters
+    ----------
+    lon : float
+        Longitude coordinate
+    lat : float
+        Latitude coordinate
+
+    Returns
+    -------
+    xr.Dataset
+        Dataset containing siteInfo data with spatial dimensions (y, x), or None if file not found
+    """
+    # Check if file exists
+    filepath = f'downloaded/siteinfo_{lon}_{lat}.xml'
+    if not os.path.exists(filepath):
+        print(f"File not found: {filepath}. Returning None.")
+        return None
+
+    # Read XML file as string
+    with open(filepath, 'r', encoding='utf-8') as f:
+        xml_string = f.read()
+
+    # Parse XML to xr data; add spatial dimensions
+    df_arr = parse_siteinfo_data(xml_string).expand_dims(y=[lat], x=[lon])
+
     df_arr['maxAbgMF'] = xr.DataArray(
-        maxAbgMF.reshape(1, 1),
+        df_arr['maxAbgMF'].values.reshape(1, 1),
         dims=['y', 'x'],
         coords={'y': [lat], 'x': [lon]}
     )
     df_arr['fpiAvgLT'] = xr.DataArray(
-        np.array(fpiAvgLT).reshape(1, 1),
+        df_arr['fpiAvgLT'].values.reshape(1, 1),
         dims=['y', 'x'],
         coords={'y': [lat], 'x': [lon]}
     )
-    
+
     return df_arr
 
 
@@ -105,14 +140,7 @@ def get_carbon_data(lon:float, lat:float) -> xr.DataArray:
     # Check if file exists
     filepath = f'downloaded/df_{lon}_{lat}.csv'
     if not os.path.exists(filepath):
-        return xr.DataArray(
-            np.full((91, 3), np.nan),
-            dims=['YEAR', 'VARIABLE'],
-            coords={
-                'YEAR': np.arange(2010, 2101),
-                'VARIABLE': ['DEBRIS_C_HA', 'SOIL_C_HA', 'TREE_C_HA']
-            }
-        ).expand_dims(y=[lat], x=[lon])
+        return None
 
     df = (
         pd.read_csv(filepath)
@@ -157,11 +185,11 @@ def get_carbon_data(lon:float, lat:float) -> xr.DataArray:
 
 
 
-def get_soilbase_data(lon: float, lat: float) -> dict:
+def parse_soilbase_data(xml_string: str) -> dict:
     """
-    Extract SoilBase information from siteInfo XML file and return as three xarray DataArrays.
+    Parse SoilBase information from siteInfo XML string and return as three xarray DataArrays.
 
-    This function extracts soil parameters from the SoilBase section of FullCAM siteInfo XML files.
+    This function extracts soil parameters from the SoilBase section of FullCAM siteInfo XML.
     The SoilBase contains three child elements:
     - SoilZap[@id='forest']: Forest soil parameters (49 numeric attributes)
     - SoilZap[@id='agriculture']: Agriculture soil parameters (49 numeric attributes)
@@ -171,43 +199,28 @@ def get_soilbase_data(lon: float, lat: float) -> dict:
 
     Parameters
     ----------
-    lon : float
-        Longitude coordinate
-    lat : float
-        Latitude coordinate
+    xml_string : str
+        Raw XML string content from siteInfo API response
 
     Returns
     -------
     dict
         Dictionary containing three xarray DataArrays:
-        - 'forest': Forest soil parameters (y, x, band) where band contains attribute names
-        - 'agriculture': Agriculture soil parameters (y, x, band) where band contains attribute names
-        - 'SoilOther': Common soil properties (y, x, band) where band contains attribute names
+        - 'forest': Forest soil parameters (band) where band contains attribute names
+        - 'agriculture': Agriculture soil parameters (band) where band contains attribute names
+        - 'SoilOther': Common soil properties (band) where band contains attribute names
 
         All attributes are numeric (float). Empty string attributes are stored as np.nan.
         Boolean attributes are converted to 1.0 (true) or 0.0 (false).
 
-    Examples
-    --------
-    >>> soil_data = get_soilbase_data(148.16, -35.61)
-    >>> # Direct access by attribute name
-    >>> clay = soil_data['SoilOther'].sel(band='clayFrac')
-    >>> ph = soil_data['forest'].sel(band='pH')
     """
-
-    # Check if file exists
-    filepath = f'downloaded/siteinfo_{lon}_{lat}.xml'
-    if not os.path.exists(filepath):
-        print(f"File not found: {filepath}. Returning None.")
-        return None
-
-    # Parse XML file
-    site_root = etree.parse(filepath).getroot()
+    # Parse XML string
+    site_root = etree.fromstring(xml_string.encode('utf-8'))
 
     # Get SoilBase element
     soilbase = site_root.find('.//SoilBase')
     if soilbase is None:
-        print(f"SoilBase element not found in {filepath}. Returning None.")
+        print(f"SoilBase element not found in XML. Returning None.")
         return None
 
     # Extract SoilZap[@id='forest']
@@ -226,9 +239,9 @@ def get_soilbase_data(lon: float, lat: float) -> dict:
     soilother_attrs = [attr for attr in soilother_attrs if attr not in ['id', 'tSoil']]  # Remove 'id' and 'tSoil' attributes
 
     # Initialize arrays with np.nan
-    forest_data = np.full((1, 1, len(forest_attrs)), np.nan).astype(np.float32)
-    agriculture_data = np.full((1, 1, len(agriculture_attrs)), np.nan).astype(np.float32)
-    soilother_data = np.full((1, 1, len(soilother_attrs)), np.nan).astype(np.float32)
+    forest_data = np.full(len(forest_attrs), np.nan).astype(np.float32)
+    agriculture_data = np.full(len(agriculture_attrs), np.nan).astype(np.float32)
+    soilother_data = np.full(len(soilother_attrs), np.nan).astype(np.float32)
 
     # Helper function to convert attribute value to float
     def convert_to_float(val):
@@ -250,51 +263,39 @@ def get_soilbase_data(lon: float, lat: float) -> dict:
         for i, attr in enumerate(forest_attrs):
             val = forest_elem.get(attr, '')
             if val != '':
-                forest_data[0, 0, i] = convert_to_float(val)
+                forest_data[i] = convert_to_float(val)
 
     # Fill agriculture data
     if agriculture_elem is not None:
         for i, attr in enumerate(agriculture_attrs):
             val = agriculture_elem.get(attr, '')
             if val != '':
-                agriculture_data[0, 0, i] = convert_to_float(val)
+                agriculture_data[i] = convert_to_float(val)
 
     # Fill SoilOther data (only numeric attributes now)
     if soilother_elem is not None:
         for i, attr in enumerate(soilother_attrs):
             val = soilother_elem.get(attr, '')
             if val != '':
-                soilother_data[0, 0, i] = convert_to_float(val)
+                soilother_data[i] = convert_to_float(val)
 
-    # Create DataArrays with attribute names as band coordinates
+    # Create DataArrays with attribute names as band coordinates (no spatial dimensions)
     forest_da = xr.DataArray(
         forest_data,
-        dims=['y', 'x', 'band'],
-        coords={
-            'y': [lat],
-            'x': [lon],
-            'band': forest_attrs
-        }
+        dims=['band'],
+        coords={'band': forest_attrs}
     )
 
     agriculture_da = xr.DataArray(
         agriculture_data,
-        dims=['y', 'x', 'band'],
-        coords={
-            'y': [lat],
-            'x': [lon],
-            'band': agriculture_attrs
-        }
+        dims=['band'],
+        coords={'band': agriculture_attrs}
     )
 
     soilother_da = xr.DataArray(
         soilother_data,
-        dims=['y', 'x', 'band'],
-        coords={
-            'y': [lat],
-            'x': [lon],
-            'band': soilother_attrs
-        }
+        dims=['band'],
+        coords={'band': soilother_attrs}
     )
 
     return {
@@ -302,6 +303,150 @@ def get_soilbase_data(lon: float, lat: float) -> dict:
         'agriculture': agriculture_da,
         'SoilOther': soilother_da
     }
+
+
+def get_soilbase_data(lon: float, lat: float) -> dict:
+    """
+    Load and parse SoilBase information from siteInfo XML file for given coordinates.
+
+    Parameters
+    ----------
+    lon : float
+        Longitude coordinate
+    lat : float
+        Latitude coordinate
+
+    Returns
+    -------
+    dict
+        Dictionary containing three xarray DataArrays with spatial dimensions (y, x, band), or None if file not found
+
+    """
+
+    # Check if file exists
+    filepath = f'downloaded/siteinfo_{lon}_{lat}.xml'
+    if not os.path.exists(filepath):
+        print(f"File not found: {filepath}. Returning None.")
+        return None
+
+    # Read XML file as string
+    with open(filepath, 'r', encoding='utf-8') as f:
+        xml_string = f.read()
+
+    # Parse XML to xr data
+    soil_data = parse_soilbase_data(xml_string)
+
+    # Add spatial dimensions to each DataArray
+    for key in soil_data:
+        soil_data[key] = soil_data[key].expand_dims(y=[lat], x=[lon])
+
+    return soil_data
+
+
+def parse_soilInit_data(xml_string: str, tsmd_year: int = 2010) -> xr.DataArray:
+    """
+    Parse soil initialization data from siteInfo XML string and return as xarray DataArray.
+
+    Parameters
+    ----------
+    xml_string : str
+        Raw XML string content from siteInfo API response
+    tsmd_year : int, optional
+        Year to use for TSMD initial value (default: 2010).
+        Must be between 1970 and the last year available in the data.
+
+    Returns
+    -------
+    xr.DataArray
+        DataArray containing soil carbon pool values and TSMD initialization values (band dimension only)
+    """
+    # Parse the siteinfo XML
+    site_root = etree.fromstring(xml_string.encode('utf-8'))
+
+    # Extract LocnSoil attributes
+    locn_soil = site_root.xpath('.//LocnSoil')[0]
+    initFracBiof = float(locn_soil.get('initFracBiof'))
+    initFracBios = float(locn_soil.get('initFracBios'))
+    initFracDpma = float(locn_soil.get('initFracDpma'))
+    initFracRpma = float(locn_soil.get('initFracRpma'))
+    initFracHums = float(locn_soil.get('initFracHums'))
+    initFracInrt = float(locn_soil.get('initFracInrt'))
+    initTotalC = float(locn_soil.get('initTotalC'))
+
+    # Calculate soil carbon pool values (tonnes C/ha)
+    biofCMInitF = initFracBiof * initTotalC
+    biosCMInitF = initFracBios * initTotalC
+    dpmaCMInitF = initFracDpma * initTotalC
+    rpmaCMInitF = initFracRpma * initTotalC
+    humsCMInitF = initFracHums * initTotalC
+    inrtCMInitF = initFracInrt * initTotalC
+
+    # Extract TSMD time series and get value for specified year
+    tsmd_elem = site_root.xpath(".//TimeSeries[@tInTS='initTSMD']")[0]
+    yr0TS = int(tsmd_elem.get('yr0TS'))  # Start year (e.g., 1970)
+
+    # Parse TSMD values
+    rawTS = tsmd_elem.find('rawTS').text
+    tsmd_values = [float(x) for x in rawTS.split(',')]
+
+    # Calculate index for the requested year
+    tsmd_index = tsmd_year - yr0TS
+    TSMDInitF = tsmd_values[tsmd_index]
+    TSMDInitA = TSMDInitF  # Same value for agriculture
+
+    # return as xarray DataArray (no spatial dimensions)
+    return xr.DataArray(
+        np.array([
+            biofCMInitF, biosCMInitF, dpmaCMInitF, rpmaCMInitF,
+            humsCMInitF, inrtCMInitF, TSMDInitF, TSMDInitA
+        ], dtype=np.float32),
+        dims=['band'],
+        coords={
+            'band': [
+                'biofCMInitF', 'biosCMInitF', 'dpmaCMInitF', 'rpmaCMInitF',
+                'humsCMInitF', 'inrtCMInitF', 'TSMDInitF', 'TSMDInitA'
+            ]
+        }
+    )
+
+
+def get_soilInit_data(lon: float, lat: float, tsmd_year: int = 2010) -> xr.DataArray:
+    """
+    Load and parse soil initialization data from siteInfo XML file for given coordinates.
+
+    Parameters
+    ----------
+    lon : float
+        Longitude coordinate
+    lat : float
+        Latitude coordinate
+    tsmd_year : int, optional
+        Year to use for TSMD initial value (default: 2010)
+
+    Returns
+    -------
+    xr.DataArray
+        DataArray containing soil initialization data with spatial dimensions (y, x, band)
+    """
+    # Construct the siteinfo file path
+    file_path = f'downloaded/siteInfo_{lon}_{lat}.xml'
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(
+            f"Required file '{file_path}' not found! "
+            f"Run get_data.py to download site data for coordinates ({lat}, {lon})."
+        )
+
+    # Read XML file as string
+    with open(file_path, 'r', encoding='utf-8') as f:
+        xml_string = f.read()
+
+    # Parse XML to xr data
+    soil_init = parse_soilInit_data(xml_string, tsmd_year)
+
+    # Add spatial dimensions
+    soil_init = soil_init.expand_dims(y=[lat], x=[lon])
+
+    return soil_init
 
 
 def export_to_geotiff_with_band_names(

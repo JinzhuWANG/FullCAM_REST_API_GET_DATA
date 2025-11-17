@@ -2,11 +2,17 @@ import numpy as np
 import xarray as xr
 import rioxarray as rio
 
-from tools.XML2NetCDF import export_to_geotiff_with_band_names, get_carbon_data, get_siteinfo_data, get_soilbase_data
 from tools.cache_manager import get_existing_downloads
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 from affine import Affine
+from tools.XML2Data import (
+    export_to_geotiff_with_band_names, 
+    get_carbon_data, 
+    get_siteinfo_data, 
+    get_soilbase_data,
+    get_soilInit_data
+)
 
 
 
@@ -42,8 +48,8 @@ lumap_xr = rio.open_rasterio('data/lumap.tif', masked=True)
 trans = list(lumap_xr.rio.transform())
 trans[2] = min(all_lons) - (cell_size_x / 2)
 trans[5] = max(all_lats) + (cell_size_y / 2)
-trans[0] = trans[0] * 5
-trans[4] = trans[4] * 5
+trans[0] = trans[0] * RES_factor
+trans[4] = trans[4] * RES_factor
 trans = Affine(*trans)
 
 
@@ -134,7 +140,32 @@ export_to_geotiff_with_band_names(soilbase_full_forest, f'data/processed/soilbas
 
 
 
+# ---------------------- Get InitSoil data ------------------------
+sample_lon, sample_lat  = next(iter(siteInfo_coords))
 
+sample_soilInit = get_soilInit_data(sample_lon, sample_lat) * np.nan
+soilInit_full = sample_soilInit.squeeze(['y', 'x'], drop=True).expand_dims(y=all_lats, x=all_lons) * np.nan
+
+# Parallel fetch data
+def fetch_soilInit_with_coords(lon, lat):
+    try:
+        data = get_soilInit_data(lon, lat)
+        return (lon, lat, data)
+    except Exception as e:
+        return (lon, lat, sample_soilInit)
+    
+tasks = [delayed(fetch_soilInit_with_coords)(lon, lat) for lon, lat in siteInfo_coords]
+for lon, lat, data in tqdm(Parallel(n_jobs=16, return_as='generator_unordered')(tasks), total=len(tasks)):
+    soilInit_full.loc[dict(y=lat, x=lon)] = data.squeeze(['y', 'x'], drop=True)
+    
+# Save to NetCDF
+soilInit_full.name = 'data'
+soilInit_full.rio.write_crs("EPSG:4283", inplace=True)
+soilInit_full.rio.write_transform(trans, inplace=True)
+soilInit_full.to_netcdf('data/processed/soilInit_RES.nc', encoding={'data': {'zlib': True, 'complevel': 5} })
+
+# Save to GeoTIFFs
+export_to_geotiff_with_band_names(soilInit_full, f'data/processed/soilInit_RES_multiband.tif')
 
 
 

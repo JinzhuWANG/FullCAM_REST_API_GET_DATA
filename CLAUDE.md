@@ -86,6 +86,16 @@ __pycache__/
 - Excluding generated output files (CSV results, plots, etc.)
 - Preventing sensitive files from being included in context
 
+**IMPORTANT - Reading XML Examples:**
+- **NEVER** read XML files from the `downloaded/` directory - it contains millions of files and is extremely slow to access
+- **ALWAYS** use example XML files in the `data/` directory instead:
+  - `data/siteinfo_response.xml` - Example siteInfo API response with climate time series, soil data, and FPI values
+  - `data/species_response.xml` - Example species API response with Eucalyptus globulus parameters
+  - `data/single_template_response.xml` - Example template API response
+- These example files contain the same XML structure as files in `downloaded/` but are fast to access
+- Use these examples to understand XML structure, element attributes, and data format
+- Only read from `downloaded/` if you need data for a specific lon/lat coordinate
+
 ## FullCAM Documentation
 
 **For detailed information about FullCAM model parameters, PLO file structure, and configuration options, refer to:**

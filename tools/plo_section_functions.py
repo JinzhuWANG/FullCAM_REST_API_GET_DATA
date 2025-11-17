@@ -12,6 +12,8 @@ import requests
 from lxml import etree
 from io import StringIO
 from threading import Lock
+from collections import Counter
+from tools.XML2Data import parse_siteinfo_data, parse_soilInit_data
 
 
 # Configuration
@@ -36,7 +38,7 @@ def _bool_to_xml(value: bool) -> str:
     """Convert Python bool to XML string format ('true'/'false')."""
     return "true" if value else "false"
 
-def get_siteinfo(lat, lon, try_number=8, download_records='downloaded/successful_downloads.txt'):
+def get_siteinfo(lat, lon, try_number=8, download_records='downloaded/successful_downloads.txt', consensus_count=3):
     PARAMS = {
         "latitude": lat,
         "longitude": lon,
@@ -47,29 +49,43 @@ def get_siteinfo(lat, lon, try_number=8, download_records='downloaded/successful
         "version": 2024
     }
     url = f"{BASE_URL_DATA}/2024/data-builder/siteinfo"
+    response_counter = Counter()
 
     for attempt in range(try_number):
+        is_last_attempt = (attempt == try_number - 1)
 
         try:
             response = requests.get(url, params=PARAMS, headers=HEADERS, timeout=100)
 
-            if response.status_code == 200:
-                filename = f'siteInfo_{lon}_{lat}.xml'
-                with open(f'downloaded/{filename}', 'wb') as f:
-                    f.write(response.content)
-
-                # Log successful download (thread-safe append with lock)
-                with _cache_write_lock:
-                    with open(download_records, 'a', encoding='utf-8') as cache:
-                        cache.write(f'{filename}\n')
-                return
-            else:
-                # HTTP error - apply backoff before retry
-                if attempt < try_number - 1:
+            # Non-200 status: apply exponential backoff and retry
+            if response.status_code != 200:
+                if not is_last_attempt:
                     time.sleep(2**attempt)
+                continue
 
-        except requests.RequestException as e:
-            if attempt < try_number - 1:
+            # Track successful response for consensus
+            response_counter[response.text] += 1
+            most_common_response, count = response_counter.most_common(1)[0]
+
+            # Consensus not reached: short delay and continue
+            if count < consensus_count:
+                if not is_last_attempt:
+                    time.sleep(0.5)
+                continue
+
+            # Consensus reached: save and return
+            print(f"Consensus reached for siteinfo at ({lat}, {lon}) after {attempt + 1} attempts.")
+            filename = f'siteInfo_{lon}_{lat}.xml'
+            with open(f'downloaded/{filename}', 'wb') as f:
+                f.write(most_common_response.encode('utf-8'))
+
+            with _cache_write_lock:
+                with open(download_records, 'a', encoding='utf-8') as cache:
+                    cache.write(f'{filename}\n')
+            return
+
+        except requests.RequestException:
+            if not is_last_attempt:
                 time.sleep(2**attempt)
 
     return f'{lon},{lat}', "Failed"
@@ -77,37 +93,40 @@ def get_siteinfo(lat, lon, try_number=8, download_records='downloaded/successful
 
 
 def get_species(lat, lon, try_number=8, download_records='downloaded/successful_downloads.txt'):
-
     url = f"{BASE_URL_DATA}/2024/data-builder/species"
     PARAMS = {
         "latitude": lat,
         "longitude": lon,
         "area": "OneKm",
         "frCat": "Plantation",
-        "specId": 8,            # Eucalyptus globulus, used as Carbon Plantations in LUTO
+        "specId": 8,  # Eucalyptus globulus, used as Carbon Plantations in LUTO
         "version": 2024
     }
 
     for attempt in range(try_number):
+        is_last_attempt = (attempt == try_number - 1)
 
         try:
             response = requests.get(url, params=PARAMS, headers=HEADERS, timeout=100)
-            if response.status_code == 200:
-                filename = f'species_{lon}_{lat}.xml'
-                with open(f'downloaded/{filename}', 'wb') as f:
-                    f.write(response.content)
-                # Log successful download (thread-safe append with lock)
-                with _cache_write_lock:
-                    with open(download_records, 'a', encoding='utf-8') as cache:
-                        cache.write(f'{filename}\n')
-                return
-            else:
-                # HTTP error - apply backoff before retry
-                if attempt < try_number - 1:
-                    time.sleep(2**attempt)
 
-        except requests.RequestException as e:
-            if attempt < try_number - 1:
+            # Non-200 status: apply exponential backoff and retry
+            if response.status_code != 200:
+                if not is_last_attempt:
+                    time.sleep(2**attempt)
+                continue
+
+            # Success: save and return
+            filename = f'species_{lon}_{lat}.xml'
+            with open(f'downloaded/{filename}', 'wb') as f:
+                f.write(response.content)
+
+            with _cache_write_lock:
+                with open(download_records, 'a', encoding='utf-8') as cache:
+                    cache.write(f'{filename}\n')
+            return
+
+        except requests.RequestException:
+            if not is_last_attempt:
                 time.sleep(2**attempt)
 
     return f'{lon},{lat}', "Failed"
@@ -1202,17 +1221,21 @@ def create_site_section(
             f"Run get_data.py to download site data for coordinates ({lat}, {lon})."
         )
 
-    # Parse DATA-API response to get TimeSeries data
-    site_root = etree.parse(file_path).getroot()
+    # Read XML file as string
+    with open(file_path, 'r', encoding='utf-8') as f:
+        xml_string = f.read()
 
-    api_avgAirTemp      = site_root.xpath('.//*[@tInTS="avgAirTemp"]')[0]
-    api_openPanEvap     = site_root.xpath('.//*[@tInTS="openPanEvap"]')[0]
-    api_rainfall        = site_root.xpath('.//*[@tInTS="rainfall"]')[0]
-    api_forestProdIx    = site_root.xpath('.//*[@tInTS="forestProdIx"]')[0]
+    # Use parse_siteinfo_data to get fpiAvgLT and maxAbgMF values
+    parsed_data = parse_siteinfo_data(xml_string)
+    fpiAvgLT = str(float(parsed_data['fpiAvgLT'].values))
+    maxAbgMF = str(float(parsed_data['maxAbgMF'].values))
 
-    fpi_values = [float(i) for i in site_root.xpath('.//*[@tInTS="forestProdIx"]//rawTS')[0].text.split(',')]
-    fpiAvgLT = str(sum(fpi_values[:48]) / 48)       # fpiAvgLT from first 48 elements (1970-2017)
-    maxAbgMF = site_root.xpath('.//*[@tIn="maxAbgMF"]')[0].get('value')
+    # Parse DATA-API response to get TimeSeries XML elements (for template merging)
+    site_root        = etree.fromstring(xml_string.encode('utf-8'))
+    api_avgAirTemp   = site_root.xpath('.//*[@tInTS="avgAirTemp"]')[0]
+    api_openPanEvap  = site_root.xpath('.//*[@tInTS="openPanEvap"]')[0]
+    api_rainfall     = site_root.xpath('.//*[@tInTS="rainfall"]')[0]
+    api_forestProdIx = site_root.xpath('.//*[@tInTS="forestProdIx"]')[0]
 
     # Parse the dataholder template, to be populated with the API TimeSeries data
     holder_root = etree.parse('data/dataholder_site.xml').getroot()
@@ -1351,54 +1374,33 @@ def create_init_section(lon: float, lat: float, tsmd_year: int = 2010):
             f"Run get_data.py to download site data for coordinates ({lat}, {lon})."
         )
 
-    # Parse the siteinfo XML
-    site_root = etree.parse(file_path).getroot()
+    # Read XML file as string and parse using parse_soilInit_data
+    with open(file_path, 'r', encoding='utf-8') as f:
+        xml_string = f.read()
 
-    # Extract LocnSoil attributes
-    locn_soil = site_root.xpath('.//LocnSoil')[0]
-    initFracBiof = float(locn_soil.get('initFracBiof'))
-    initFracBios = float(locn_soil.get('initFracBios'))
-    initFracDpma = float(locn_soil.get('initFracDpma'))
-    initFracRpma = float(locn_soil.get('initFracRpma'))
-    initFracHums = float(locn_soil.get('initFracHums'))
-    initFracInrt = float(locn_soil.get('initFracInrt'))
-    initTotalC = float(locn_soil.get('initTotalC'))
-    
-    # Calculate soil carbon pool values (tonnes C/ha)
-    biofCMInitF = initFracBiof * initTotalC
-    biosCMInitF = initFracBios * initTotalC
-    dpmaCMInitF = initFracDpma * initTotalC
-    rpmaCMInitF = initFracRpma * initTotalC
-    humsCMInitF = initFracHums * initTotalC
-    inrtCMInitF = initFracInrt * initTotalC  
-      
-    # Extract TSMD time series and get value for specified year
-    tsmd_elem = site_root.xpath(".//TimeSeries[@tInTS='initTSMD']")[0]
-    yr0TS = int(tsmd_elem.get('yr0TS'))  # Start year (e.g., 1970)
-    nYrsTS = int(tsmd_elem.get('nYrsTS'))  # Number of years
+    # Use parse_soilInit_data to get the soil initialization values
+    soil_init_data = parse_soilInit_data(xml_string, tsmd_year)
 
-    # Parse TSMD values
-    rawTS = tsmd_elem.find('rawTS').text
-    tsmd_values = [float(x) for x in rawTS.split(',')]
+    # Extract values from xarray DataArray
+    bands = soil_init_data.coords['band'].values
+    values = soil_init_data.values  # Extract the 1D array of values
 
-    # Calculate index for the requested year
-    tsmd_index = tsmd_year - yr0TS
-    TSMDInitF = tsmd_values[tsmd_index]
-    TSMDInitA = TSMDInitF  # Same value for agriculture
+    # Create a dictionary for easy access
+    init_values = dict(zip(bands, values))
 
     # Update InitSoilF element
     init_soil_f = holder_init.xpath('.//InitSoilF')[0]
-    init_soil_f.set('dpmaCMInitF', str(dpmaCMInitF))
-    init_soil_f.set('rpmaCMInitF', str(rpmaCMInitF))
-    init_soil_f.set('biofCMInitF', str(biofCMInitF))
-    init_soil_f.set('biosCMInitF', str(biosCMInitF))
-    init_soil_f.set('humsCMInitF', str(humsCMInitF))
-    init_soil_f.set('inrtCMInitF', str(inrtCMInitF))
-    init_soil_f.set('TSMDInitF', str(TSMDInitF))
+    init_soil_f.set('dpmaCMInitF', str(init_values['dpmaCMInitF']))
+    init_soil_f.set('rpmaCMInitF', str(init_values['rpmaCMInitF']))
+    init_soil_f.set('biofCMInitF', str(init_values['biofCMInitF']))
+    init_soil_f.set('biosCMInitF', str(init_values['biosCMInitF']))
+    init_soil_f.set('humsCMInitF', str(init_values['humsCMInitF']))
+    init_soil_f.set('inrtCMInitF', str(init_values['inrtCMInitF']))
+    init_soil_f.set('TSMDInitF', str(init_values['TSMDInitF']))
 
     # Update InitSoilA element (only TSMD, soil carbon stays empty for agriculture)
     init_soil_a = holder_init.xpath('.//InitSoilA')[0]
-    init_soil_a.set('TSMDInitA', str(TSMDInitA))
+    init_soil_a.set('TSMDInitA', str(init_values['TSMDInitA']))
 
     # Return the updated Init section as XML string
     return etree.tostring(holder_init, encoding='unicode')
