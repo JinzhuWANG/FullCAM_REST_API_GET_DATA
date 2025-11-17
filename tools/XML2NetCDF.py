@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import rasterio
 import xarray as xr
 import numpy as np
 
@@ -302,4 +303,76 @@ def get_soilbase_data(lon: float, lat: float) -> dict:
         'SoilOther': soilother_da
     }
 
+
+def export_to_geotiff_with_band_names(
+    xarry:xr.DataArray|xr.DataArray, 
+    output_path:str, 
+    band_dim:str='band', 
+    compress:str='lzw'
+)->None:
+    """
+    Export xarray DataArray to GeoTIFF with proper band names/descriptions.
+
+    This function uses rasterio to write GeoTIFF files with band descriptions
+    taken from the coordinate values of the band dimension. This ensures that
+    multi-band GeoTIFFs have meaningful band names instead of generic Band_1, Band_2, etc.
+
+    Parameters
+    ----------
+    xarry : xr.DataArray
+        Input DataArray with spatial dimensions (y, x) and optional band dimension.
+        Must have rio CRS and transform already set via rio.write_crs() and rio.write_transform().
+    output_path : str
+        Output file path for the GeoTIFF
+    band_dim : str, optional
+        Name of the band dimension (default: 'band'). If this dimension exists,
+        its coordinate values will be used as band descriptions.
+    compress : str, optional
+        Compression method for GeoTIFF (default: 'lzw'). Common options: 'lzw', 'deflate', 'packbits'
+
+    Returns
+    -------
+    None
+        Writes GeoTIFF to disk
+    """
+
+    # Ensure proper dimension order
+    if band_dim in xarry.dims:
+        # Multi-band: ensure (band, y, x) order
+        xarry = xarry.transpose(band_dim, 'y', 'x')
+        if len(xarry.coords[band_dim].values.shape) == 1: # band dim is 1D
+            band_names = [str(i) for i in xarry.coords[band_dim].values]
+        else:
+            band_names = ["_".join(map(str, i)) for i in xarry.coords[band_dim].values]
+    else:
+        # Single band: ensure (y, x) order
+        xarry = xarry.transpose('y', 'x')
+        band_names = None
+
+    # Get rasterio profile from rioxarray
+    profile = {
+        'driver': 'GTiff',
+        'dtype': xarry.dtype,
+        'width': xarry.rio.width,
+        'height': xarry.rio.height,
+        'count': xarry.shape[0] if band_names else 1,
+        'crs': xarry.rio.crs,
+        'transform': xarry.rio.transform(),
+        'compress': compress,
+        'tiled': True,
+        'blockxsize': 256,
+        'blockysize': 256,
+    }
+
+    # Write GeoTIFF with rasterio
+    with rasterio.open(output_path, 'w', **profile) as dst:
+        if band_names:
+            # Multi-band: write each band with description
+            for i, band_name in enumerate(band_names, start=1):
+                dst.write(xarry.isel({band_dim: i-1}).values, i)
+                dst.set_band_description(i, str(band_name))
+        else:
+            # Single band
+            dst.write(xarry.values, 1)
     
+    print(f"Exported GeoTIFF to {output_path}")

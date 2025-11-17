@@ -1,13 +1,14 @@
-
+import numpy as np
 import xarray as xr
 import rioxarray as rio
-import numpy as np
 
-from tools.XML2NetCDF import get_carbon_data, get_siteinfo_data, get_soilbase_data
+from tools.XML2NetCDF import export_to_geotiff_with_band_names, get_carbon_data, get_siteinfo_data, get_soilbase_data
 from tools.cache_manager import get_existing_downloads
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 from affine import Affine
+
+
 
 
 
@@ -78,9 +79,8 @@ siteInfo_full.to_netcdf('data/processed/siteinfo_RES.nc', encoding={var: {'zlib'
 for var, xarry in siteInfo_full.data_vars.items():
     if len(xarry.dims) > 2:
         to_stack_dims = [dim for dim in xarry.dims if dim not in ['y', 'x']]
-        xarry = xarry.stack(band=to_stack_dims).transpose('band', 'y', 'x').astype(np.float32)
-    xarry.rio.to_raster(f'data/processed/siteInfo_{var}_RES_multiband.tif', compress='lzw')
-    print(f"Saved {var} with shape {xarry.shape}")
+        xarry = xarry.stack(band=to_stack_dims).astype(np.float32)
+    export_to_geotiff_with_band_names(xarry, f'data/processed/siteInfo_{var}_RES_multiband.tif')
     
 
 
@@ -128,9 +128,9 @@ soilbase_full_soilother.rio.write_transform(trans, inplace=True)
 soilbase_full_soilother.to_netcdf('data/processed/soilbase_soilother_RES.nc')
 
 # Save to GeoTIFFs
-soilbase_full_soilother.transpose('band', 'y', 'x').rio.to_raster(f'data/processed/soilbase_soilother_RES_multiband.tif', compress='lzw')
-soilbase_full_agriculture.transpose('band', 'y', 'x').rio.to_raster(f'data/processed/soilbase_agriculture_RES_multiband.tif', compress='lzw')
-soilbase_full_forest.transpose('band', 'y', 'x').rio.to_raster(f'data/processed/soilbase_forest_RES_multiband.tif', compress='lzw')
+export_to_geotiff_with_band_names(soilbase_full_soilother, f'data/processed/soilbase_soilother_RES_multiband.tif')
+export_to_geotiff_with_band_names(soilbase_full_agriculture, f'data/processed/soilbase_agriculture_RES_multiband.tif')
+export_to_geotiff_with_band_names(soilbase_full_forest, f'data/processed/soilbase_forest_RES_multiband.tif')
 
 
 
@@ -167,13 +167,10 @@ carbon_full.rio.write_crs("EPSG:4326", inplace=True)
 carbon_full.rio.write_transform(trans, inplace=True)
 carbon_full.to_netcdf('data/processed/carbonstock_RES.nc', encoding={'data': {'zlib': True, 'complevel': 5}})
 
-
 # Save to GeoTIFFs
 for var in carbon_full['VARIABLE'].values:
     xarry = carbon_full.sel(VARIABLE=var, drop=True)
-    xarry = xarry.transpose('YEAR', 'y', 'x')
-    xarry.rio.to_raster(f'data/processed/carbonstock_{var}_RES_multiband.tif', compress='lzw')
-    print(f"Saved carbon stock variable {var} with shape {xarry.shape}")
+    export_to_geotiff_with_band_names(xarry, f'data/processed/carbonstock_{var}_RES_multiband.tif', band_dim='YEAR')
 
 
 
