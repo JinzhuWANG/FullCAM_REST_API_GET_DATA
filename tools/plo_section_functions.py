@@ -38,7 +38,7 @@ def _bool_to_xml(value: bool) -> str:
     """Convert Python bool to XML string format ('true'/'false')."""
     return "true" if value else "false"
 
-def get_siteinfo(lat, lon, try_number=8, download_records='downloaded/successful_downloads.txt', consensus_count=3):
+def get_siteinfo(lat, lon, try_number=10, download_records='downloaded/successful_downloads.txt', consensus_count=3):
     PARAMS = {
         "latitude": lat,
         "longitude": lon,
@@ -74,7 +74,7 @@ def get_siteinfo(lat, lon, try_number=8, download_records='downloaded/successful
                 continue
 
             # Consensus reached: save and return
-            print(f"Consensus reached for siteinfo at ({lat}, {lon}) after {attempt + 1} attempts.")
+            print(f"Consensus reached for siteinfo at ({lon}, {lat}) after {attempt + 1} attempts.")
             filename = f'siteInfo_{lon}_{lat}.xml'
             with open(f'downloaded/{filename}', 'wb') as f:
                 f.write(most_common_response.encode('utf-8'))
@@ -92,7 +92,7 @@ def get_siteinfo(lat, lon, try_number=8, download_records='downloaded/successful
 
 
 
-def get_species(lat, lon, try_number=8, download_records='downloaded/successful_downloads.txt'):
+def get_species(lat, lon, try_number=10, download_records='downloaded/successful_downloads.txt'):
     url = f"{BASE_URL_DATA}/2024/data-builder/species"
     PARAMS = {
         "latitude": lat,
