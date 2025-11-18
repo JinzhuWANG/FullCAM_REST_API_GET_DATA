@@ -17,7 +17,6 @@ from tools.XML2Data import (
 
 
 
-
 # Get variables
 RES_factor = 10
 existing_siteinfo, existing_species, existing_dfs = get_existing_downloads()
@@ -46,8 +45,8 @@ cell_size_y = abs(all_lats[1] - all_lats[0])
 # Get affine transform
 lumap_xr = rio.open_rasterio('data/lumap.tif', masked=True)
 trans = list(lumap_xr.rio.transform())
-trans[2] = min(all_lons) - (cell_size_x / 2)
-trans[5] = max(all_lats) + (cell_size_y / 2)
+trans[2] = min(all_lons) + (cell_size_x / 2)
+trans[5] = max(all_lats) - (cell_size_y / 2)
 trans[0] = trans[0] * RES_factor
 trans[4] = trans[4] * RES_factor
 trans = Affine(*trans)
@@ -94,9 +93,9 @@ for var, xarry in siteInfo_full.data_vars.items():
 sample_lon, sample_lat  = next(iter(siteInfo_coords))
 sample_template_forest, sample_template_agriculture, sample_template_soilother = get_soilbase_data(sample_lon, sample_lat).values()
 
-sample_template_forest*= np.nan
-sample_template_agriculture *= np.nan
-sample_template_soilother *= np.nan
+sample_template_forest = sample_template_forest * np.nan
+sample_template_agriculture = sample_template_agriculture * np.nan
+sample_template_soilother = sample_template_soilother * np.nan
 
 soilbase_full_forest = sample_template_forest.squeeze(['y', 'x'], drop=True).expand_dims(y=all_lats, x=all_lons) * np.nan
 soilbase_full_agriculture = sample_template_agriculture.squeeze(['y', 'x'], drop=True).expand_dims(y=all_lats, x=all_lons) * np.nan
@@ -187,14 +186,14 @@ def fetch_carbon_with_coords(lon, lat):
         return (lon, lat, carbon_template)
     
 tasks = [delayed(fetch_carbon_with_coords)(lon, lat) for lon, lat in Carbon_coords]
-for lon, lat, data in tqdm(Parallel(n_jobs=8, return_as='generator_unordered')(tasks), total=len(tasks)):
+for lon, lat, data in tqdm(Parallel(n_jobs=16, return_as='generator_unordered')(tasks), total=len(tasks)):
     carbon_full.loc[dict(y=lat, x=lon)] = data.squeeze(['y', 'x'], drop=True)
 
 
 # Save to NetCDF
 carbon_full.name = 'data'
 carbon_full = carbon_full.astype(np.float32)
-carbon_full.rio.write_crs("EPSG:4326", inplace=True)
+carbon_full.rio.write_crs("EPSG:4283", inplace=True)
 carbon_full.rio.write_transform(trans, inplace=True)
 carbon_full.to_netcdf('data/processed/carbonstock_RES.nc', encoding={'data': {'zlib': True, 'complevel': 5}})
 

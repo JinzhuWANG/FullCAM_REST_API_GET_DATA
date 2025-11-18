@@ -6,6 +6,7 @@ Each function generates XML for a specific section with proper Python docstrings
 
 import os
 import time
+import numpy as np
 import pandas as pd
 import requests
 
@@ -13,7 +14,7 @@ from lxml import etree
 from io import StringIO
 from threading import Lock
 from collections import Counter
-from tools.XML2Data import parse_siteinfo_data, parse_soilInit_data
+from tools.XML2Data import parse_siteinfo_data, parse_soilInit_data, parse_soilbase_data
 
 
 # Configuration
@@ -49,7 +50,11 @@ def get_siteinfo(lat, lon, try_number=10, download_records='downloaded/successfu
         "version": 2024
     }
     url = f"{BASE_URL_DATA}/2024/data-builder/siteinfo"
-    response_counter = Counter()
+    
+    soilbase_map = {}               # Maps soilBase hash to response text
+    soilinit_map = {}               # Maps soilInit hash to response text
+    soilbase_counter = Counter()    # Count occurrences of each soilBase hash
+    soilinit_counter = Counter()    # Count occurrences of each soilInit hash
 
     for attempt in range(try_number):
         is_last_attempt = (attempt == try_number - 1)
@@ -57,38 +62,65 @@ def get_siteinfo(lat, lon, try_number=10, download_records='downloaded/successfu
         try:
             response = requests.get(url, params=PARAMS, headers=HEADERS, timeout=100)
 
-            # Non-200 status: apply exponential backoff and retry
+            # Apply exponential backoff and retry for non-200 status
             if response.status_code != 200:
                 if not is_last_attempt:
                     time.sleep(2**attempt)
                 continue
 
-            # Track successful response for consensus
-            response_counter[response.text] += 1
-            most_common_response, count = response_counter.most_common(1)[0]
 
-            # Consensus not reached: short delay and continue
-            if count < consensus_count:
+            # Track SoilBase occurrences for consensus
+            soilBase = np.round(parse_soilbase_data(response.text)['SoilOther'].values, 3)
+            soilbase_key = tuple(soilBase.tolist())
+            soilbase_counter[soilbase_key] += 1
+            soilbase_map[soilbase_key] = response.text
+            most_common_soilbase, base_count = soilbase_counter.most_common(1)[0]
+            
+            # Track SoilInit occurrences for consensus
+            soilInit = np.round(parse_soilInit_data(response.text).values, 3)
+            soilinit_key = tuple(soilInit.tolist())
+            soilinit_counter[soilinit_key] += 1
+            soilinit_map[soilinit_key] = response.text
+            most_common_soilinit, init_count = soilinit_counter.most_common(1)[0]
+
+            # Check if consensus reached for both soilBase and soilInit
+            if (base_count < consensus_count) or (init_count < consensus_count):
                 if not is_last_attempt:
                     time.sleep(0.5)
                 continue
+            
+            # Extract soilBase and soilInit consensus elements
+            consense_soilinit = soilinit_map[most_common_soilinit]
+            consense_soilinit_tree = etree.fromstring(consense_soilinit.encode('utf-8'))
 
-            # Consensus reached: save and return
+            consense_soilbase = soilbase_map[most_common_soilbase]
+            consense_soilbase_tree = etree.fromstring(consense_soilbase.encode('utf-8'))
+
+            # Find SoilBase elements
+            soilinit_soilbase_elem = consense_soilinit_tree.find('.//SoilBase')
+            consensus_soilbase_elem = consense_soilbase_tree.find('.//SoilBase')
+            soilinit_soilbase_elem.getparent().replace(soilinit_soilbase_elem, consensus_soilbase_elem)
+
+
+            # Consensus reached: save merged response and return
             print(f"Consensus reached for siteinfo at ({lon}, {lat}) after {attempt + 1} attempts.")
             filename = f'siteInfo_{lon}_{lat}.xml'
+            consensus_response = etree.tostring(consense_soilinit_tree, encoding='utf-8', xml_declaration=True)
+
             with open(f'downloaded/{filename}', 'wb') as f:
-                f.write(most_common_response.encode('utf-8'))
+                f.write(consensus_response)
 
             with _cache_write_lock:
                 with open(download_records, 'a', encoding='utf-8') as cache:
                     cache.write(f'{filename}\n')
-            return
+                    
+            return 
 
         except requests.RequestException:
             if not is_last_attempt:
                 time.sleep(2**attempt)
 
-    return f'{lon},{lat}', "Failed"
+    return f'{lon}, {lat}', "Failed"
 
 
 
@@ -1221,46 +1253,45 @@ def create_site_section(
             f"Run get_data.py to download site data for coordinates ({lat}, {lon})."
         )
 
-    # Read XML file as string
+    # Parse XML tree
     with open(file_path, 'r', encoding='utf-8') as f:
-        xml_string = f.read()
+        parsed_data = parse_siteinfo_data(f.read())
+        
+    # Parse data holder XML 
+    holder_root = etree.parse('data/dataholder_site.xml').getroot()
+    
 
-    # Use parse_siteinfo_data to get fpiAvgLT and maxAbgMF values
-    parsed_data = parse_siteinfo_data(xml_string)
+    # Extract data   
     fpiAvgLT = str(float(parsed_data['fpiAvgLT'].values))
     maxAbgMF = str(float(parsed_data['maxAbgMF'].values))
-
-    # Parse DATA-API response to get TimeSeries XML elements (for template merging)
-    site_root        = etree.fromstring(xml_string.encode('utf-8'))
-    api_avgAirTemp   = site_root.xpath('.//*[@tInTS="avgAirTemp"]')[0]
-    api_openPanEvap  = site_root.xpath('.//*[@tInTS="openPanEvap"]')[0]
-    api_rainfall     = site_root.xpath('.//*[@tInTS="rainfall"]')[0]
-    api_forestProdIx = site_root.xpath('.//*[@tInTS="forestProdIx"]')[0]
-
-    # Parse the dataholder template, to be populated with the API TimeSeries data
-    holder_root = etree.parse('data/dataholder_site.xml').getroot()
-
-    timeseries_replacements = {
-        "avgAirTemp": api_avgAirTemp,
-        "openPanEvap": api_openPanEvap,
-        "rainfall": api_rainfall,
-        "forestProdIx": api_forestProdIx
-    }
-
-    for ts_type, api_element in timeseries_replacements.items():
-        holder_element = holder_root.xpath(f'.//*[@tInTS="{ts_type}"]')[0]
-        holder_element.getparent().replace(holder_element, api_element)
-
-    # Generate TimeSeries content
+     
+    avgAirTemp_values = parsed_data['avgAirTemp'].values.flatten()
+    holder_root.xpath(f'.//*[@tInTS="avgAirTemp"]/rawTS')[0].text = ','.join(map(str, avgAirTemp_values))
+    holder_root.xpath(f'.//*[@tInTS="avgAirTemp"]/rawTS')[0].set('count', str(len(avgAirTemp_values)))
+    
+    openPanEvap_values = parsed_data['openPanEvap'].values.flatten()
+    holder_root.xpath(f'.//*[@tInTS="openPanEvap"]/rawTS')[0].text = ','.join(map(str, openPanEvap_values))
+    holder_root.xpath(f'.//*[@tInTS="openPanEvap"]/rawTS')[0].set('count', str(len(openPanEvap_values)))
+    
+    rainfall_values = parsed_data['rainfall'].values.flatten()
+    holder_root.xpath(f'.//*[@tInTS="rainfall"]/rawTS')[0].text = ','.join(map(str, rainfall_values))
+    holder_root.xpath(f'.//*[@tInTS="rainfall"]/rawTS')[0].set('count', str(len(rainfall_values)))
+    
+    forestProdIx_values = [i for i in parsed_data['forestProdIx'].values.flatten() if not np.isnan(i)]
+    holder_root.xpath(f'.//*[@tInTS="forestProdIx"]/rawTS')[0].text = ','.join(map(str, forestProdIx_values))
+    holder_root.xpath(f'.//*[@tInTS="forestProdIx"]/rawTS')[0].set('count', str(len(forestProdIx_values)))
+    
+    
+    # Get count
     timeseries_elements = holder_root.findall('.//TimeSeries')
-    timeseries_content = ''.join(
-        etree.tostring(ts, encoding='unicode', pretty_print=True).replace('\n    ', '')
-        for ts in timeseries_elements
-    )
-
     count = len(timeseries_elements)
 
     # Build Site XML
+    timeseries_content = ''.join(
+        etree.tostring(ts).decode('utf-8')
+        for ts in timeseries_elements
+    )
+    
     site_open = (f'<Site count="{count}" tAirTemp="{tAirTemp}" '
                  f'tVPD="{tVPD}" tSoilTemp="{tSoilTemp}" '
                  f'hasArea="{_bool_to_xml(hasArea)}" userHasArea="{_bool_to_xml(userHasArea)}" '
@@ -1374,19 +1405,10 @@ def create_init_section(lon: float, lat: float, tsmd_year: int = 2010):
             f"Run get_data.py to download site data for coordinates ({lat}, {lon})."
         )
 
-    # Read XML file as string and parse using parse_soilInit_data
+    # Extract soilInit data from siteinfo file
     with open(file_path, 'r', encoding='utf-8') as f:
-        xml_string = f.read()
-
-    # Use parse_soilInit_data to get the soil initialization values
-    soil_init_data = parse_soilInit_data(xml_string, tsmd_year)
-
-    # Extract values from xarray DataArray
-    bands = soil_init_data.coords['band'].values
-    values = soil_init_data.values  # Extract the 1D array of values
-
-    # Create a dictionary for easy access
-    init_values = dict(zip(bands, values))
+        soil_init_data = parse_soilInit_data(f.read(), tsmd_year)
+        init_values = dict(zip(soil_init_data.coords['band'].values, soil_init_data.values))
 
     # Update InitSoilF element
     init_soil_f = holder_init.xpath('.//InitSoilF')[0]
@@ -1396,7 +1418,7 @@ def create_init_section(lon: float, lat: float, tsmd_year: int = 2010):
     init_soil_f.set('biosCMInitF', str(init_values['biosCMInitF']))
     init_soil_f.set('humsCMInitF', str(init_values['humsCMInitF']))
     init_soil_f.set('inrtCMInitF', str(init_values['inrtCMInitF']))
-    init_soil_f.set('TSMDInitF', str(init_values['TSMDInitF']))
+    init_soil_f.set('TSMDInitF',   str(init_values['TSMDInitF']))
 
     # Update InitSoilA element (only TSMD, soil carbon stays empty for agriculture)
     init_soil_a = holder_init.xpath('.//InitSoilA')[0]

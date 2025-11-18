@@ -68,7 +68,7 @@ tasks = [
     for lon, lat in tqdm(to_request_coords, total=len(to_request_coords))
 ]
 
-for _ in tqdm(Parallel(n_jobs=60, return_as='generator_unordered')(tasks), total=len(tasks)):
+for _ in tqdm(Parallel(n_jobs=20, return_as='generator_unordered')(tasks), total=len(tasks)):
     pass
 
 
