@@ -29,7 +29,8 @@ def parse_siteinfo_data(xml_string: str) -> xr.Dataset:
     year_start      = int(api_avgAirTemp.get('yr0TS'))
     num_per_year    = int(api_avgAirTemp.get('dataPerYrTS'))
     num_years       = int(api_avgAirTemp.get('nYrsTS'))
-    raw_values      = np.array(eval(api_avgAirTemp.xpath('.//rawTS')[0].text))
+    # OPTIMIZATION: Parse CSV directly with np.fromstring - much faster than eval()
+    raw_values      = np.fromstring(api_avgAirTemp.xpath('.//rawTS')[0].text, sep=',')
 
     df_arr = xr.Dataset(
         coords={
@@ -47,7 +48,7 @@ def parse_siteinfo_data(xml_string: str) -> xr.Dataset:
 
     # Get openPanEvap TimeSeries
     api_openPanEvap = site_root.xpath('.//*[@tInTS="openPanEvap"]')[0]
-    raw_values = np.array(eval(api_openPanEvap.xpath('.//rawTS')[0].text))
+    raw_values = np.fromstring(api_openPanEvap.xpath('.//rawTS')[0].text, sep=',')
     df_arr['openPanEvap'] = xr.DataArray(
         raw_values.reshape(num_years, num_per_year),
         coords=df_arr.coords,
@@ -57,7 +58,7 @@ def parse_siteinfo_data(xml_string: str) -> xr.Dataset:
 
     # Get rainfall TimeSeries
     api_rainfall = site_root.xpath('.//*[@tInTS="rainfall"]')[0]
-    raw_values = np.array(eval(api_rainfall.xpath('.//rawTS')[0].text))
+    raw_values = np.fromstring(api_rainfall.xpath('.//rawTS')[0].text, sep=',')
     df_arr['rainfall'] = xr.DataArray(
         raw_values.reshape(num_years, num_per_year),
         coords=df_arr.coords,
@@ -70,7 +71,7 @@ def parse_siteinfo_data(xml_string: str) -> xr.Dataset:
     year_start = int(api_forestProdIx.get('yr0TS'))
     num_per_year = int(api_forestProdIx.get('dataPerYrTS')) # 1, means its annual data
     num_years = int(api_forestProdIx.get('nYrsTS'))
-    raw_values = np.array(eval(api_forestProdIx.xpath('.//rawTS')[0].text))
+    raw_values = np.fromstring(api_forestProdIx.xpath('.//rawTS')[0].text, sep=',')
     df_arr['forestProdIx'] = xr.DataArray(
         raw_values.reshape(num_years),
         dims=['year'],
@@ -81,7 +82,7 @@ def parse_siteinfo_data(xml_string: str) -> xr.Dataset:
     # Extract from Site element attributes
     site_elem = site_root.find('.//Site')
     maxAbgMF = float(site_elem.get('maxAbgMF', 0.0))
-    fpiAvgLT = float(site_elem.get('fpiAvgLT', 0.0))
+    fpiAvgLT = df_arr['forestProdIx'][:48].mean().item()  # Average over first 48 years [1970-2017]
 
     df_arr['maxAbgMF'] = xr.DataArray(maxAbgMF)
     df_arr['fpiAvgLT'] = xr.DataArray(fpiAvgLT)
@@ -120,17 +121,6 @@ def get_siteinfo_data(plo_file: str) -> xr.Dataset:
 
     # Parse XML to xr data; add spatial dimensions
     df_arr = parse_siteinfo_data(xml_string).expand_dims(y=[lat], x=[lon])
-
-    df_arr['maxAbgMF'] = xr.DataArray(
-        df_arr['maxAbgMF'].values.reshape(1, 1),
-        dims=['y', 'x'],
-        coords={'y': [lat], 'x': [lon]}
-    )
-    df_arr['fpiAvgLT'] = xr.DataArray(
-        df_arr['fpiAvgLT'].values.reshape(1, 1),
-        dims=['y', 'x'],
-        coords={'y': [lat], 'x': [lon]}
-    )
 
     return df_arr
 
@@ -272,7 +262,7 @@ def parse_soilInit_data(xml_string: str) -> xr.DataArray:
     xr.DataArray
         DataArray containing soil carbon pool values and TSMD initialization values (band dimension only)
         Band coordinates: ['biofCMInitF', 'biosCMInitF', 'dpmaCMInitF', 'rpmaCMInitF',
-                          'humsCMInitF', 'inrtCMInitF', 'TSMDInitF', 'ASWInitF']
+                          'humsCMInitF', 'inrtCMInitF', 'TSMDInitF', 'TSMDInitF']
     """
     # Parse the PLO XML
     site_root = etree.fromstring(xml_string.encode('utf-8'))
@@ -290,21 +280,20 @@ def parse_soilInit_data(xml_string: str) -> xr.DataArray:
 
     # TSMD and ASW initial values
     TSMDInitF = float(init_soil.get('TSMDInitF', 0.0))
-    ASWInitF = init_soil.get('ASWInitF', np.nan)  # May be empty string
-    if ASWInitF == '':
-        ASWInitF = np.nan
+    TSMDInitF = init_soil.get('TSMDInitF', np.nan)  
+
 
     # return as xarray DataArray (no spatial dimensions)
     return xr.DataArray(
         np.array([
             biofCMInitF, biosCMInitF, dpmaCMInitF, rpmaCMInitF,
-            humsCMInitF, inrtCMInitF, TSMDInitF, ASWInitF
+            humsCMInitF, inrtCMInitF, TSMDInitF, TSMDInitF
         ], dtype=np.float32),
         dims=['band'],
         coords={
             'band': [
                 'biofCMInitF', 'biosCMInitF', 'dpmaCMInitF', 'rpmaCMInitF',
-                'humsCMInitF', 'inrtCMInitF', 'TSMDInitF', 'ASWInitF'
+                'humsCMInitF', 'inrtCMInitF', 'TSMDInitF', 'TSMDInitF'
             ]
         }
     )

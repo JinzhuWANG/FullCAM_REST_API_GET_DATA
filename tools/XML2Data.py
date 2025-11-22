@@ -31,7 +31,8 @@ def parse_siteinfo_data(xml_string: str) -> xr.Dataset:
     year_start      = int(api_avgAirTemp.get('yr0TS'))
     num_per_year    = int(api_avgAirTemp.get('dataPerYrTS'))
     num_years       = int(api_avgAirTemp.get('nYrsTS'))
-    raw_values      = np.array(eval(api_avgAirTemp.xpath('.//rawTS')[0].text))
+    # OPTIMIZATION: Parse CSV directly with np.fromstring - much faster than eval()
+    raw_values      = np.fromstring(api_avgAirTemp.xpath('.//rawTS')[0].text, sep=',')
 
     df_arr = xr.Dataset(
         coords={
@@ -49,7 +50,7 @@ def parse_siteinfo_data(xml_string: str) -> xr.Dataset:
 
     # Get openPanEvap TimeSeries
     api_openPanEvap = site_root.xpath('.//*[@tInTS="openPanEvap"]')[0]
-    raw_values = np.array(eval(api_openPanEvap.xpath('.//rawTS')[0].text))
+    raw_values = np.fromstring(api_openPanEvap.xpath('.//rawTS')[0].text, sep=',')
     df_arr['openPanEvap'] = xr.DataArray(
         raw_values.reshape(num_years, num_per_year),
         coords=df_arr.coords,
@@ -59,7 +60,7 @@ def parse_siteinfo_data(xml_string: str) -> xr.Dataset:
 
     # Get rainfall TimeSeries
     api_rainfall = site_root.xpath('.//*[@tInTS="rainfall"]')[0]
-    raw_values = np.array(eval(api_rainfall.xpath('.//rawTS')[0].text))
+    raw_values = np.fromstring(api_rainfall.xpath('.//rawTS')[0].text, sep=',')
     df_arr['rainfall'] = xr.DataArray(
         raw_values.reshape(num_years, num_per_year),
         coords=df_arr.coords,
@@ -72,7 +73,7 @@ def parse_siteinfo_data(xml_string: str) -> xr.Dataset:
     year_start = int(api_forestProdIx.get('yr0TS'))
     num_per_year = int(api_forestProdIx.get('dataPerYrTS')) # 1, means its annual data
     num_years = int(api_forestProdIx.get('nYrsTS'))
-    raw_values = np.array(eval(api_forestProdIx.xpath('.//rawTS')[0].text))
+    raw_values = np.fromstring(api_forestProdIx.xpath('.//rawTS')[0].text, sep=',')
     df_arr['forestProdIx'] = xr.DataArray(
         raw_values.reshape(num_years),
         dims=['year'],
@@ -80,7 +81,8 @@ def parse_siteinfo_data(xml_string: str) -> xr.Dataset:
     )
 
     # Append static variables (no spatial dimensions yet)
-    maxAbgMF = np.array(eval(site_root.xpath('.//*[@tIn="maxAbgMF"]')[0].get('value')))
+    # OPTIMIZATION: Direct float conversion instead of eval()
+    maxAbgMF = float(site_root.xpath('.//*[@tIn="maxAbgMF"]')[0].get('value'))
     fpiAvgLT = df_arr['forestProdIx'][:48].mean(dim='year').values  # fpiAvgLT from first 48 elements (1970-2017)
     df_arr['maxAbgMF'] = xr.DataArray(maxAbgMF)
     df_arr['fpiAvgLT'] = xr.DataArray(fpiAvgLT)
@@ -116,17 +118,6 @@ def get_siteinfo_data(lon:float, lat:float) -> xr.Dataset:
 
     # Parse XML to xr data; add spatial dimensions
     df_arr = parse_siteinfo_data(xml_string).expand_dims(y=[lat], x=[lon])
-
-    df_arr['maxAbgMF'] = xr.DataArray(
-        df_arr['maxAbgMF'].values.reshape(1, 1),
-        dims=['y', 'x'],
-        coords={'y': [lat], 'x': [lon]}
-    )
-    df_arr['fpiAvgLT'] = xr.DataArray(
-        df_arr['fpiAvgLT'].values.reshape(1, 1),
-        dims=['y', 'x'],
-        coords={'y': [lat], 'x': [lon]}
-    )
 
     return df_arr
 

@@ -8,7 +8,7 @@ It extracts siteinfo, soilbase, and soilinit data from PLO files and creates spa
 """
 
 
-import os, re, shutil
+import os, re
 import scandir_rs
 import numpy as np
 import xarray as xr
@@ -28,7 +28,7 @@ from tools.XML2Data_PLO import (
 
 # ===================== Configuration =====================
 # Resolution factor for downsampling (10 = 0.1° grid spacing)
-RES_factor = 10
+RES_factor = 1
 PLO_dir = Path('N:/Data-Master/FullCAM/XMLfiles')
 Cache_dir = Path('F:/jinzhu/TMP/Full_cam_tmp')
 OUTPUT_DIR = Path('N:/Data-Master/FullCAM/FullCAM_REST_API_GET_DATA_2025/data/processed/BB_PLO_OneKm')
@@ -91,7 +91,6 @@ trans[4] = trans[4] * RES_factor
 trans = Affine(*trans)
 
 
-
 # ===================== Process SiteInfo Data =====================
 sample_template = get_siteinfo_data(plo_coord_map[(sample_lon, sample_lat)]) * np.nan
 
@@ -104,10 +103,7 @@ def fetch_siteinfo_from_plo(lon, lat):
     """Fetch siteinfo data from PLO file."""
     try:
         plo_file_from = plo_coord_map.get((lon, lat))
-        plo_file_to = Cache_dir / os.path.basename(plo_file_from)
-        shutil.copyfile(plo_file_from, plo_file_to)
-        data = get_siteinfo_data(plo_file_to)
-        os.remove(plo_file_to)
+        data = get_siteinfo_data(plo_file_from)
         return (lon, lat, data)
     except Exception as e:
         print(f"Error processing siteinfo for ({lon}, {lat}): {e}")

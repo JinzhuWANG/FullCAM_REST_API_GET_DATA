@@ -1,8 +1,6 @@
 .claude/settings.local.json
 __pycache__/
 downloaded/
-data/plot_simulation_response.csv
-data/processed/
-data/soil_compare
+data/*
 files.pkl
 .claude/settings.local.json
