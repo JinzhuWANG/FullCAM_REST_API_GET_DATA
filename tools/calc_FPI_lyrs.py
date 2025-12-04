@@ -10,6 +10,7 @@ from joblib import Parallel, delayed
 from rioxarray import merge as rio_merge
 from tools.cache_manager import get_existing_downloads
 
+
 # Config
 RES_factor = 10
 
@@ -30,6 +31,7 @@ RES_coords = RES_df.set_index(['x', 'y']).index.tolist()
 res_coords = set(existing_siteinfo).intersection(set(RES_coords))
 res_coords_x = xr.DataArray([coord[0] for coord in res_coords], dims=['cell'])
 res_coords_y = xr.DataArray([coord[1] for coord in res_coords], dims=['cell'])
+
 
 # Get FPR shads
 def load_tif_year(tif, year):
@@ -71,7 +73,7 @@ FPI_all_years.to_netcdf('data/FPI_lys/FPI_lyrs.nc', encoding={'data': {'zlib': T
 
 
 
-# Plot RESTful vs SoilLandscape Clay Comparison
+# ------------------ Plot RESTful vs SoilLandscape Clay Comparison ------------------
 FPI_restfull = (
     xr.open_dataset('data/processed/siteinfo_RES.nc')['forestProdIx']
     .compute()
@@ -106,21 +108,4 @@ fig = (
         x='FPI from RESTful SiteInfo',
         y='FPI from SoilLandscape'
     )
-)
-
-
-# Calc FPI_RESTful/FPI_SoilLandscape ratio
-Layer_2d_template = xr.open_dataset('data/processed/siteinfo_RES.nc')['forestProdIx']
-
-FPI_ratio = FPI_restfull / FPI_SoilLandscape
-FPI_ratio_2D = Layer_2d_template * np.nan
-FPI_ratio_2D.loc[dict(y=res_coords_y, x=res_coords_x, year=FPI_ratio.year)] = FPI_ratio
-
-
-median_ratio = FPI_ratio_2D.median('year')
-median_ratio.rio.write_crs("EPSG:4283", inplace=True)
-median_ratio.rio.to_raster(
-    'data/FPI_lys/FPI_RESTful_SoilLandscape_ratio_RES.tif',
-    compress='LZW', 
-    dtype=np.float32
 )

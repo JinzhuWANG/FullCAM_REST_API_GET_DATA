@@ -1,6 +1,7 @@
 
 import rioxarray as rio
 import xarray as xr
+import rioxarray as rxr
 import numpy as np
 import plotnine as p9
 
@@ -35,45 +36,47 @@ res_coords_y = xr.DataArray([coord[1] for coord in res_coords], dims=['cell'])
 
 
 # --------------- Load Soil Clay Data ---------------
-
-soilBase_restfull = (
+clay_FULLCAM_ds = (
     xr.open_dataset('data/processed/soilbase_soilother_RES.nc')['data']
-    .sel(band='clayFrac')
-    .compute()
+    .sel(band='clayFrac', drop=True)
 )
 
 soil_00_05 = (
     rio.open_rasterio(soil_path / '000-005cm/CLY_000_005_EV_N_P_AU_TRN_N_20210902.tif')
     .sel(band=1, drop=True)
-    .sel(x=soilBase_restfull.x, y=soilBase_restfull.y, method='nearest')
-    .compute()
 )
 soil_05_15 = (
     rio.open_rasterio(soil_path / '005-015cm/CLY_005_015_EV_N_P_AU_TRN_N_20210902.tif')
     .sel(band=1, drop=True)
-    .sel(x=soilBase_restfull.x, y=soilBase_restfull.y, method='nearest')
-    .compute()
 )
 soil_15_30 = (
     rio.open_rasterio(soil_path / '015-030cm/CLY_015_030_EV_N_P_AU_TRN_N_20210902.tif')
     .sel(band=1, drop=True)
-    .sel(x=soilBase_restfull.x, y=soilBase_restfull.y, method='nearest')
-    .compute()
 )
 
 soil_00_30 = (soil_00_05 + soil_05_15  + soil_15_30) / 3 / 100
+
 soil_00_30.rio.write_crs("EPSG:4326", inplace=True)
-soil_00_30.rio.write_transform(soilBase_restfull.rio.transform(), inplace=True)
+soil_00_30.rio.write_transform(clay_FULLCAM_ds.rio.transform(), inplace=True)
 soil_00_30.rio.to_raster(
-    'data/Soil_landscape_AUS/ClayContent/clayFrac_00_30cm_RES.tif',
+    'data/Soil_landscape_AUS/ClayContent/clayFrac_00_30cm.tif',
     compress='LZW'
 )
 
 
 
-# Plot comparison
+# ---------------------------- Plot comparison -------------------------------------
+clay_FULLCAM_arr = clay_FULLCAM_ds.sel(x=res_coords_x, y=res_coords_y, method='nearest').compute()
+
+soil_00_30 = (
+    rxr.open_rasterio('data/Soil_landscape_AUS/ClayContent/clayFrac_00_30cm.tif')
+    .sel(band=1, drop=True)
+    .compute()
+    .sel(x=res_coords_x, y=res_coords_y, method='nearest')
+)
+
 plt_data = (
-    xr.concat([soilBase_restfull, soil_00_30], dim='source').assign_coords(source=['RESTful', 'SoilLandscape'])
+    xr.concat([clay_FULLCAM_arr, soil_00_30], dim='source').assign_coords(source=['FullCAM', 'Downloaded'])
     .to_dataframe()
     .reset_index()
     .dropna()
@@ -84,14 +87,14 @@ plt_data = (
 )
 
 fig = (
-    p9.ggplot()
-    + p9.aes(x=plt_data['RESTful'], y=plt_data['SoilLandscape'])
+    p9.ggplot(plt_data[::5])
+    + p9.aes(x='FullCAM', y='Downloaded')
     + p9.geom_point(alpha=0.05, size=0.5)
     + p9.geom_abline(slope=1, intercept=0, color='red', linetype='dashed')
     + p9.labs(
         title='Soil Clay Fraction (0-30cm) Comparison',
-        x='RESTful Soil Clay Fraction',
-        y='Soil Landscape Clay Fraction'
+        x='FullCAM Soil Clay Fraction',
+        y='Downloaded Clay Fraction'
     )
     + p9.theme_bw()
 )

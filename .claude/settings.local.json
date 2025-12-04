@@ -4,7 +4,11 @@
       "Bash(\"F:\\jinzhu\\conda_env\\luto\\python.exe\" -c:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(\"F:\\jinzhu\\conda_env\\luto\\python.exe\" -c \"import tools.XML2Data_PLO; print(''Module imported successfully'')\")",
+      "Bash(\"F:\\jinzhu\\conda_env\\luto\\python.exe\" -c \"from tools.XML2Data_PLO import parse_siteinfo_data; print(''Successfully imported optimized parse_siteinfo_data''); import json; print(f''json module available: {json.__name__}'')\")",
+      "Bash(dir:*)",
+      "Bash(\"F:\\jinzhu\\conda_env\\luto\\python.exe\" \"N:\\Data-Master\\FullCAM\\FullCAM_REST_API_GET_DATA_2025\\tools\\unzip_FPI_layers.py\")"
     ],
     "deny": [],
     "ask": []

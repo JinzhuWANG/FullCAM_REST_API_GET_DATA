@@ -30,8 +30,14 @@ RES_coords = RES_df.set_index(['x', 'y']).index.tolist()
 
 # Get valid RES coords
 res_coords = set(existing_siteinfo).intersection(set(RES_coords))
-res_coords_x = xr.DataArray([coord[0] for coord in res_coords], dims=['cell'])
-res_coords_y = xr.DataArray([coord[1] for coord in res_coords], dims=['cell'])
+res_coords_x = xr.DataArray([coord[0] for coord in res_coords], dims=['cell']).astype('float32')
+res_coords_y = xr.DataArray([coord[1] for coord in res_coords], dims=['cell']).astype('float32')
+
+# Save the PLO_RES data if not already saved
+if not (PLO_data_path / f'siteinfo_PLO_RES_{RES_factor}.nc').exists():
+    siteinfo_PLO_Full = xr.open_dataset(PLO_data_path / 'siteinfo_PLO_RES.nc').compute()
+    siteinfo_PLO_RESed = siteinfo_PLO_Full.sel(x=res_coords_x, y=res_coords_y)
+    siteinfo_PLO_RESed.to_netcdf(PLO_data_path / f'siteinfo_PLO_RES_{RES_factor}.nc')
 
 
 # ===================== Helper Functions =====================
@@ -40,16 +46,14 @@ def compare_variable(
     dataset_restfull: xr.Dataset,
     dataset_plo: xr.Dataset,
     variable_name: str,
-    coords_x: xr.DataArray,
-    coords_y: xr.DataArray,
     subsample: int = 100,
     alpha: float = 0.05,
     point_size: float = 0.05
 ):
 
     # Extract variable data
-    var_restfull = dataset_restfull[variable_name].sel(x=coords_x, y=coords_y, drop=True)
-    var_plo = dataset_plo[variable_name].sel(x=coords_x, y=coords_y, drop=True)
+    var_restfull = dataset_restfull[variable_name]
+    var_plo = dataset_plo[variable_name]
 
     # Merge and prepare data
     plot_data = xr.merge([
@@ -76,21 +80,18 @@ def compare_variable(
 
 
 # ---------------------- Compare SiteInfo data ------------------------
-siteInfo_restfull = xr.open_dataset('data/processed/siteinfo_RES.nc').compute()
-siteInfo_PLO = xr.open_dataset(PLO_data_path / 'siteinfo_PLO_RES.nc').compute()
-
-
+siteInfo_restfull = xr.open_dataset('data/processed/siteinfo_RES.nc').compute().sel(x=res_coords_x, y=res_coords_y, drop=True)
+siteInfo_PLO = xr.open_dataset(PLO_data_path / f'siteinfo_PLO_RES_{RES_factor}.nc').compute()
+siteInfo_PLO
 # avgAirTemp
 fig_avgAirTemp = compare_variable(
     siteInfo_restfull,
     siteInfo_PLO,
     'avgAirTemp',
-    res_coords_x,
-    res_coords_y
 ) + p9.labs(
     title='Comparison of avgAirTemp: REST-Full vs PLO',
-    x='REST-Full avgAirTemp (°C)',
-    y='PLO avgAirTemp (°C)'
+    x='FullCAM Data-api avgAirTemp (°C)',
+    y='Archived PLO avgAirTemp (°C)'
 )
 
 # openPanEvap
@@ -98,12 +99,10 @@ fig_openPanEvap = compare_variable(
     siteInfo_restfull,
     siteInfo_PLO,
     'openPanEvap',
-    res_coords_x,
-    res_coords_y
 ) + p9.labs(
     title='Comparison of openPanEvap: REST-Full vs PLO',
-    x='REST-Full openPanEvap (mm)',
-    y='PLO openPanEvap (mm)'
+    x='FullCAM Data-api openPanEvap (mm)',
+    y='Archived PLO openPanEvap (mm)'
 )
 
 # rainfall
@@ -111,12 +110,10 @@ fig_rainfall = compare_variable(
     siteInfo_restfull,
     siteInfo_PLO,
     'rainfall',
-    res_coords_x,
-    res_coords_y
 ) + p9.labs(
     title='Comparison of rainfall: REST-Full vs PLO',
-    x='REST-Full rainfall (mm)',
-    y='PLO rainfall (mm)'
+    x='FullCAM Data-api rainfall (mm)',
+    y='Archived PLO rainfall (mm)'
 )
 
 # forestProdIx
@@ -124,13 +121,11 @@ fig_forestProdIx = compare_variable(
     siteInfo_restfull,
     siteInfo_PLO,
     'forestProdIx',
-    res_coords_x,
-    res_coords_y,
     subsample=10
 ) + p9.labs(
     title='Comparison of forestProdIx: REST-Full vs PLO',
-    x='REST-Full forestProdIx',
-    y='PLO forestProdIx'
+    x='FullCAM Data-api forestProdIx',
+    y='Archived PLO forestProdIx'
 )
 
 # maxAbgMF
@@ -138,13 +133,11 @@ fig_maxAbgMF = compare_variable(
     siteInfo_restfull,
     siteInfo_PLO,
     'maxAbgMF',
-    res_coords_x,
-    res_coords_y,
     subsample=1
 ) + p9.labs(
     title='Comparison of maxAbgMF: REST-Full vs PLO',
-    x='REST-Full maxAbgMF',
-    y='PLO maxAbgMF',
+    x='FullCAM Data-api maxAbgMF',
+    y='Archived PLO maxAbgMF'
 )
 
 # fpiAvgLT
@@ -152,13 +145,11 @@ fig_fpiAvgLT = compare_variable(
     siteInfo_restfull,
     siteInfo_PLO,
     'fpiAvgLT',
-    res_coords_x,
-    res_coords_y,
     subsample=1
 ) + p9.labs(
     title='Comparison of fpiAvgLT: REST-Full vs PLO',
-    x='REST-Full fpiAvgLT',
-    y='PLO fpiAvgLT',
+    x='FullCAM Data-api fpiAvgLT',
+    y='Archived PLO fpiAvgLT'
 )
 
 
@@ -166,6 +157,10 @@ fig_fpiAvgLT = compare_variable(
 # ---------------------- Compare SoilBase data ------------------------
 soilBase_restfull = xr.open_dataset('data/processed/soilbase_soilother_RES.nc')['data'].compute()
 soilBase_PLO = xr.open_dataset(PLO_data_path / 'soilbase_PLO_soilother_RES.nc')['data'].compute()
+
+soilClary_landscape_grid = xr.open_dataarray('data/Soil_landscape_AUS/ClayContent/clayFrac_00_30cm_RES.tif').compute()
+soilClary_landscape_grid['x'] = soilClary_landscape_grid['x'].astype('float32')
+soilClary_landscape_grid['y'] = soilClary_landscape_grid['y'].astype('float32')
 
 # bulkDensity
 soilBase_restfull.sel(band='bulkDensity').plot()
@@ -175,19 +170,11 @@ soilBase_PLO.sel(band='bulkDensity').plot()
 soilBase_restfull.sel(band='maxASW').plot()
 soilBase_PLO.sel(band='maxASW').plot()
 
-# clayFrac
+# clayFrac (FullCAM Data-api vs Archived PLO)
 plt_data_clayFrac = xr.merge([
     soilBase_restfull.sel(band='clayFrac').rename('restfull'),
     soilBase_PLO.sel(band='clayFrac').rename('PLO')
 ], join='inner').to_dataframe().reset_index().dropna()
-
-
-import matplotlib.pyplot as plt
-soilBase_restfull.sel(band='clayFrac').plot()
-plt.show()
-
-soilBase_PLO.sel(band='clayFrac').plot()
-plt.show()
 
 
 fig_clayFrac = (
@@ -206,6 +193,31 @@ fig_clayFrac = (
         title='Comparison of clayFrac: REST-Full vs PLO',
         x='REST-Full clayFrac',
         y='PLO clayFrac'
+    )
+)
+
+# clayFrac (FullCAM Data-api vs Soil Landscape)
+plt_data_clayFrac_SL = xr.merge([
+    soilBase_restfull.sel(band='clayFrac').rename('restfull'),
+    soilClary_landscape_grid.rename('SoilLandscape')
+], join='inner').to_dataframe().reset_index().dropna()
+
+fig_clayFrac_SL = (
+    p9.ggplot() +
+    p9.geom_point(
+        p9.aes(
+            x=plt_data_clayFrac_SL['restfull'],
+            y=plt_data_clayFrac_SL['SoilLandscape']
+        ),
+        alpha=0.1,
+        size=0.05
+    ) +
+    p9.geom_abline(slope=1, intercept=0, color='red', linetype='dashed') +
+    p9.theme_bw() +
+    p9.labs(
+        title='Comparison of clayFrac: REST-Full vs Soil Landscape',
+        x='REST-Full clayFrac',
+        y='Soil Landscape clayFrac'
     )
 )
 

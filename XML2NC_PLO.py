@@ -118,10 +118,19 @@ for lon, lat, data in tqdm(Parallel(n_jobs=16, backend='threading', return_as='g
 print("Saving SiteInfo NetCDF...")
 siteInfo_full.rio.write_crs("EPSG:4283", inplace=True)
 siteInfo_full.rio.write_transform(trans, inplace=True)
-siteInfo_full.to_netcdf(
-    OUTPUT_DIR / 'siteinfo_PLO_RES.nc',
-    encoding={var: {'zlib': True, 'complevel': 5} for var in siteInfo_full.data_vars}
-)
+
+encoding = {}   # Chunk the data to x-64, y-64, full-year, full-month for faster access
+for var in siteInfo_full.data_vars:
+    dims = siteInfo_full[var].dims
+    if dims == ('y', 'x', 'year', 'month'):
+        encoding[var] = {'zlib': True, 'complevel': 5, 'chunksizes': [64, 64, 49, 12]}
+    elif dims == ('y', 'x'):
+        encoding[var] = {'zlib': True, 'complevel': 5, 'chunksizes': [64, 64]}
+    elif dims == ('y', 'x', 'year'):
+        # Handle any other dimension combinations
+        encoding[var] = {'zlib': True, 'complevel': 5, 'chunksizes': [64, 64, 49]}
+        
+siteInfo_full.to_netcdf(OUTPUT_DIR / 'siteinfo_PLO_RES_chunk.nc', encoding=encoding)
 
 # Save to GeoTIFFs
 print("Saving SiteInfo GeoTIFFs...")
