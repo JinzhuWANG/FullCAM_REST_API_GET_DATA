@@ -87,14 +87,14 @@ plt_data = (
 )
 
 fig = (
-    p9.ggplot(plt_data[::5])
+    p9.ggplot(plt_data[::10])
     + p9.aes(x='FullCAM', y='Downloaded')
-    + p9.geom_point(alpha=0.05, size=0.5)
+    + p9.geom_point(alpha=0.3, size=0.5)
     + p9.geom_abline(slope=1, intercept=0, color='red', linetype='dashed')
     + p9.labs(
         title='Soil Clay Fraction (0-30cm) Comparison',
-        x='FullCAM Soil Clay Fraction',
-        y='Downloaded Clay Fraction'
+        x='Clay Fraction FullCAM',
+        y='Clay Fraction Downloaded'
     )
     + p9.theme_bw()
 )

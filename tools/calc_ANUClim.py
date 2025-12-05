@@ -3,8 +3,10 @@ import requests
 import io
 import rioxarray as rxr
 import numpy as np
+import pandas as pd
 import xarray as xr
 import pathlib
+import plotnine as p9
 
 
 from tqdm.auto import tqdm
@@ -143,17 +145,19 @@ evap_f = [i for i in files if "evap" in i.name]
 years = sorted(set([int(i.name.split("monthly_")[1][:4]) for i in evap_f]))
 months = sorted(set([int(i.name.split("monthly_")[1][4:6]) for i in evap_f]))
 
-evap_ds = xr.open_dataset(evap_f[0]
-    )['evap'].isel(time=0, drop=True
-    ).expand_dims(year=years, month=months
+evap_ds = (
+    xr.open_dataset(evap_f[0])['evap'] 
+    .isel(time=0, drop=True)
+    .rename({'lon': 'x', 'lat': 'y'})
+    .expand_dims(year=years, month=months
     ) 
+) * np.nan
 
 for f in tqdm(evap_f):
     ds = xr.open_dataset(f)['evap']
     _year = ds.time.dt.year.item()
     _month = ds.time.dt.month.item()
-    evap_ds.loc[dict(year=_year, month=_month)].values = ds.isel(time=0, drop=True)
-    
+    evap_ds.loc[dict(year=_year, month=_month)] = ds.isel(time=0, drop=True).values
     
     
 # ----- rain ----- 
@@ -161,16 +165,18 @@ rain_f = [i for i in files if "rain" in i.name]
 years = sorted(set([int(i.name.split("monthly_")[1][:4]) for i in rain_f]))
 months = sorted(set([int(i.name.split("monthly_")[1][4:6]) for i in rain_f]))
 
-rain_ds = xr.open_dataset(rain_f[0]
-    )['rain'].isel(time=0, drop=True
-    ).expand_dims(year=years, month=months
-    )
+rain_ds =( 
+    xr.open_dataset(rain_f[0])['rain']
+    .isel(time=0, drop=True)
+    .expand_dims(year=years, month=months)
+    .rename({'lon': 'x', 'lat': 'y'})
+) * np.nan
     
 for f in tqdm(rain_f):
     ds = xr.open_dataset(f)['rain']
     _year = ds.time.dt.year.item()
     _month = ds.time.dt.month.item()
-    rain_ds.loc[dict(year=_year, month=_month)].values = ds.isel(time=0, drop=True)
+    rain_ds.loc[dict(year=_year, month=_month)] = ds.isel(time=0, drop=True).values
     
     
     
@@ -179,16 +185,19 @@ tavg_f = [i for i in files if "tavg" in i.name]
 years = sorted(set([int(i.name.split("monthly_")[1][:4]) for i in tavg_f]))
 months = sorted(set([int(i.name.split("monthly_")[1][4:6]) for i in tavg_f]))
 
-tavg_ds = xr.open_dataset(tavg_f[0]
-    )['tavg'].isel(time=0, drop=True
-    ).expand_dims(year=years, month=months
-    )
-    
+tavg_ds = (
+    xr.open_dataset(tavg_f[0])['tavg']
+    .isel(time=0, drop=True)
+    .expand_dims(year=years, month=months)
+    .rename({'lon': 'x', 'lat': 'y'})
+) * np.nan
+
+
 for f in tqdm(tavg_f):
     ds = xr.open_dataset(f)['tavg']
     _year = ds.time.dt.year.item()
     _month = ds.time.dt.month.item()
-    tavg_ds.loc[dict(year=_year, month=_month)].values = ds.isel(time=0, drop=True)
+    tavg_ds.loc[dict(year=_year, month=_month)] = ds.isel(time=0, drop=True).values
     
     
 # Combine dataarray to a dataset
@@ -202,9 +211,9 @@ combined_ds.to_netcdf(
     "data/ANUClim/processed/ANUClim_to_FullCAM.nc", 
     mode='w',
     encoding={
-        'openPanEvap': {'zlib': True, 'complevel': 5},
-        'rainfall': {'zlib': True, 'complevel': 5},
-        'avgAirTemp': {'zlib': True, 'complevel': 5},
+        'openPanEvap': {'zlib': True, 'complevel': 5, 'chunksizes': (1, 1, 256, 256)},
+        'rainfall': {'zlib': True, 'complevel': 5, 'chunksizes': (1, 1, 256, 256)},
+        'avgAirTemp': {'zlib': True, 'complevel': 5, 'chunksizes': (1, 1, 256, 256)},
     }
 )
 
@@ -249,29 +258,97 @@ data_FullCam = (
     .sel(x=res_coords_x, y=res_coords_y)
 )
 
-
 data_ANUClim = (
     xr.open_dataset("data/ANUClim/processed/ANUClim_to_FullCAM.nc")
-    .rename({'lon': 'x', 'lat': 'y'})
-    .sel(x=res_coords_x,  y=res_coords_y, method='nearest')
     .compute()
+    .sel(x=res_coords_x,  y=res_coords_y, method='nearest') 
 )
+
 
 
 # openPanEvap
-evap_FullCAM = data_FullCam['openPanEvap']
-evap_downloaded = data_ANUClim['openPanEvap'].compute()
+evap_FullCAM = data_FullCam['openPanEvap'].to_dataframe().reset_index()
+evap_downloaded = data_ANUClim['openPanEvap'].to_dataframe().reset_index()
 
 plot_data = (
-    xr.concat([evap_FullCAM, evap_downloaded], dim='source').assign_coords(source=['FullCAM', 'Downloaded'])
-    .to_dataframe()
-    .reset_index()
+    pd.merge(
+        evap_FullCAM,
+        evap_downloaded,
+        on=['cell', 'year', 'month'],
+        suffixes=('_FullCAM', '_Downloaded')
+    )
+    .round({'x':3, 'y':3})
     .dropna()
-    .pivot
 )
 
 
+fig = (
+    p9.ggplot(plot_data[::1000], p9.aes(x='openPanEvap_FullCAM', y='openPanEvap_Downloaded'))
+    + p9.geom_point(alpha=0.3)
+    + p9.geom_abline(slope=1, intercept=0, color='red', linetype='dashed')
+    + p9.labs(
+        title='ANUClim Data Download vs FullCAM Data',
+        x='FullCAM openPanEvap (mm/month)',
+        y='Downloaded openPanEvap (mm/month)'
+    )
+    + p9.theme_bw()
+)
 
+
+# rainfull
+rain_FullCAM = data_FullCam['rainfall'].to_dataframe().reset_index()
+rain_downloaded = data_ANUClim['rainfall'].to_dataframe().reset_index()
+
+plot_data = (
+    pd.merge(
+        rain_FullCAM,
+        rain_downloaded,
+        on=['cell', 'year', 'month'],
+        suffixes=('_FullCAM', '_Downloaded')
+    )
+    .round({'x':3, 'y':3})
+    .dropna()
+)
+
+fig = (
+    p9.ggplot(plot_data[::1000], p9.aes(x='rainfall_FullCAM', y='rainfall_Downloaded'))
+    + p9.geom_point(alpha=0.3)
+    + p9.geom_abline(slope=1, intercept=0, color='red', linetype='dashed')
+    + p9.labs(
+        title='ANUClim Data Download vs FullCAM Data',
+        x='FullCAM rainfall (mm/month)',
+        y='Downloaded rainfall (mm/month)'
+    )
+    + p9.theme_bw()
+)
+
+
+# avgAirTemp
+tavg_FullCAM = data_FullCam['avgAirTemp'].to_dataframe().reset_index()
+tavg_downloaded = data_ANUClim['avgAirTemp'].to_dataframe().reset_index()  
+
+plot_data = (
+    pd.merge(
+        tavg_FullCAM,
+        tavg_downloaded,
+        on=['cell', 'year', 'month'],
+        suffixes=('_FullCAM', '_Downloaded')
+    )
+    .round({'x':3, 'y':3})
+    .dropna()
+)
+
+fig = (
+    p9.ggplot(plot_data[::1000], p9.aes(x='avgAirTemp_FullCAM', y='avgAirTemp_Downloaded'))
+    + p9.geom_point(alpha=0.3)
+    + p9.geom_abline(slope=1, intercept=0, color='red', linetype='dashed')
+    + p9.labs(
+        title='ANUClim Data Download vs FullCAM Data',
+        x='FullCAM avgAirTemp (°C)',
+        y='Downloaded avgAirTemp (°C)'
+    )
+    + p9.theme_bw()
+)
 
 
 

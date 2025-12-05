@@ -64,17 +64,17 @@ plot_data = (
     .pivot(index=['x', 'y'], columns=['source'], values='maxAbgMF')
     .reset_index()
     .dropna()
-)
+).query('FullCAM < 100')
 
 fig = (
     p9.ggplot()
     + p9.aes(x=plot_data[::100]['FullCAM'], y=plot_data[::100]['Downloaded'])
-    + p9.geom_point(alpha=0.05, size=0.5)
+    + p9.geom_point(alpha=0.3, size=0.5)
     + p9.geom_abline(slope=1, intercept=0, linetype='dashed', color='red')
     + p9.labs(
         title='Forest Productivity Index (FPI) Comparison: FullCAM vs SoilLandscape',
-        x='FPI from FullCAM SiteInfo',
-        y='FPI from SoilLandscape'
+        x='FPI from FullCAM',
+        y='FPI from Downloaded'
     )
 )
 
