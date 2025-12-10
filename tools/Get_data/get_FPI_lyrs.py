@@ -103,8 +103,9 @@ fig = (
     + p9.aes(x=plot_data[::100]['RESTful'], y=plot_data[::100]['FPI_SoilLandscape'])
     + p9.geom_point(alpha=0.3, size=0.5)
     + p9.geom_abline(slope=1, intercept=0, linetype='dashed', color='red')
+    + p9.theme_bw()
     + p9.labs(
-        title='Forest Productivity Index (FPI) Comparison: RESTful vs SoilLandscape',
+        title='Forest Productivity Index Comparison',
         x='FPI FullCAM',
         y='FPI Downloaded'
     )

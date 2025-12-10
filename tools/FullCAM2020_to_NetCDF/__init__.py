@@ -287,13 +287,13 @@ def parse_soilInit_data(xml_string: str) -> xr.DataArray:
     return xr.DataArray(
         np.array([
             biofCMInitF, biosCMInitF, dpmaCMInitF, rpmaCMInitF,
-            humsCMInitF, inrtCMInitF, TSMDInitF, TSMDInitF
+            humsCMInitF, inrtCMInitF, TSMDInitF
         ], dtype=np.float32),
         dims=['band'],
         coords={
             'band': [
                 'biofCMInitF', 'biosCMInitF', 'dpmaCMInitF', 'rpmaCMInitF',
-                'humsCMInitF', 'inrtCMInitF', 'TSMDInitF', 'TSMDInitF'
+                'humsCMInitF', 'inrtCMInitF', 'TSMDInitF'
             ]
         }
     )

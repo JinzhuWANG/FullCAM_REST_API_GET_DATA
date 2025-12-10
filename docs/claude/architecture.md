@@ -4,91 +4,74 @@ This document describes the system architecture, module design, and data flow fo
 
 ## System Overview
 
-The codebase consists of **four main pipelines**:
+The codebase consists of **three main pipelines**:
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌────────────────┐    ┌──────────────────┐
-│  Data Download  │───▶│  PLO Generation  │───▶│  Simulation    │───▶│ Data Processing  │
-│   Pipeline      │    │    Pipeline      │    │   Pipeline     │    │    Pipeline      │
-└─────────────────┘    └──────────────────┘    └────────────────┘    └──────────────────┘
-   get_data.py      plo_section_functions.py     get_PLO.py          XML2NC.py
-                                                                      XML2NC_PLO.py
+┌──────────────────┐    ┌────────────────┐    ┌──────────────────┐
+│  PLO Generation  │───▶│  Simulation    │───▶│ Data Processing  │
+│    Pipeline      │    │   Pipeline     │    │    Pipeline      │
+└──────────────────┘    └────────────────┘    └──────────────────┘
+   tools/__init__.py    RUN_FullCAM2024.py      FullCAM2NC.py
 ```
 
-### Pipeline 1: Data Download
+### Pipeline 1: PLO Generation + Data Download
 
-**Module:** [get_data.py](../../get_data.py)
+**Module:** [tools/__init__.py](../../tools/__init__.py)
 
-**Purpose:** Bulk download and cache API data for Australian locations
+**Purpose:** Generate PLO files from cached API data and download data if missing
 
 **Key Features:**
 - Identifies valid coordinates from LUTO land use raster (`data/lumap.tif`)
-- Downloads two types of data per location:
-  - `siteInfo_{lon}_{lat}.xml` - Climate time series, soil data, FPI values
-  - `species_{lon}_{lat}.xml` - Eucalyptus globulus (specId=8) parameters
-- **35 concurrent threads** with exponential backoff retry (up to 8 attempts)
-- **Intelligent caching system** (see [Caching System](#caching-system) below)
+- Downloads siteInfo data with consensus mechanism (3 matching responses)
+- Auto-downloads missing data when generating PLO files
+- Thread-safe caching via `downloaded/successful_downloads.txt`
 
-**Workflow:**
-```python
-1. Load Australian coordinates from lumap.tif (5x downsampled)
-2. Read cache index (successful_downloads.txt)
-3. Filter out already-downloaded coordinates
-4. Parallel download with retry logic:
-   - Request siteInfo from API
-   - Request species data from API
-   - Save to downloaded/ directory
-   - Append to cache index (thread-safe)
-5. Resume on interruption (cache provides state)
-```
-
-**Output:** Thousands of XML files in `downloaded/` directory
-
-### Pipeline 2: PLO Generation
-
-**Module:** [tools/plo_section_functions.py](../../tools/plo_section_functions.py)
-
-**Purpose:** Generate complete PLO files from cached API data
-
-**Key Function:** `assemble_plo_sections(lon, lat, year_start=2010)`
+**Key Function:** `assemble_plo_sections(lon, lat, species, year_start=2010)`
 
 **Architecture:**
 ```
 assemble_plo_sections()
 ├── create_meta_section()           # Plot metadata
-├── create_config_section()         # Simulation flags
-├── create_timing_section()         # Time parameters
+├── create_config_section()         # Simulation flags (from dataholder_config.xml)
+├── create_timing_section()         # Time parameters (from dataholder_timing.xml)
 ├── create_build_section()          # Location & spatial params
-├── create_site_section()           # Loads siteInfo XML + template
-├── create_species_section()        # Loads species XML
-├── create_soil_section()           # Loads siteInfo XML + template
-├── create_init_section()           # Loads siteInfo XML + template
-├── create_event_section()          # Loads event template
-├── create_outwinset_section()      # Loads GUI template
-├── create_logentryset_section()    # Loads log template
-├── create_mnrl_mulch_section()     # Loads nitrogen template
-└── create_other_info_section()     # Loads economic template
+├── create_site_section()           # Loads siteInfo XML + dataholder_site.xml
+├── create_species_section()        # Loads species template (dataholder_species_*.xml)
+├── create_soil_section()           # Loads siteInfo XML + dataholder_soil.xml
+├── create_init_section()           # Loads siteInfo XML + dataholder_init.xml
+├── create_event_section()          # Loads dataholder_event_block.xml
+├── create_outwinset_section()      # Loads dataholder_OutWinSet.xml
+├── create_logentryset_section()    # Loads dataholder_logentryset.xml
+├── create_mnrl_mulch_section()     # Loads dataholder_Mnrl_Mulch.xml
+└── create_other_info_section()     # Loads dataholder_other_info.xml
 ```
 
 **Data Sources:**
-- `downloaded/siteInfo_{lon}_{lat}.xml` - Climate/soil data
-- `downloaded/species_{lon}_{lat}.xml` - Species parameters
-- `data/dataholder_*.xml` - Section templates (8 files)
+- `downloaded/siteInfo_{lon}_{lat}.xml` - Climate/soil data (downloaded on demand)
+- `data/dataholder_*.xml` - Section templates
+- `data/dataholder_species_*.xml` - Species templates (Eucalyptus_globulus, Mallee_eucalypt, Environmental_plantings)
+
+**Helper Functions in tools/__init__.py:**
+- `get_siteinfo(lat, lon)` - Download siteInfo with consensus mechanism
+- `get_species(lat, lon)` - Download species data
+- `get_downloading_coords(resfactor)` - Get grid coordinates from LUTO raster
+- `get_plot_simulation(lon, lat, url, headers)` - Run simulation via API
 
 **Output:** Complete PLO XML string ready for simulation
 
-### Pipeline 3: Simulation
+### Pipeline 2: Simulation
 
-**Module:** [get_PLO.py](../../get_PLO.py)
+**Module:** [RUN_FullCAM2024.py](../../RUN_FullCAM2024.py)
 
-**Purpose:** End-to-end workflow from coordinates to simulation results
+**Purpose:** Run batch FullCAM simulations for multiple locations
 
 **Workflow:**
 ```python
-1. Generate PLO file: assemble_plo_sections(lon, lat, year_start)
-2. Submit to FullCAM Simulator API (POST multipart/form-data)
-3. Receive CSV results (carbon stocks/fluxes over time)
-4. Save to downloaded/df_{lat}_{lon}.csv
+1. Load coordinates from LUTO raster (via get_downloading_coords)
+2. Check cache for existing simulation results
+3. Generate PLO files: assemble_plo_sections(lon, lat, species, year_start)
+4. Submit to FullCAM Simulator API via get_plot_simulation()
+5. Save results to downloaded/df_{lon}_{lat}.csv
 ```
 
 **API Interaction:**
@@ -96,36 +79,33 @@ assemble_plo_sections()
 - **Input:** PLO file as multipart form data
 - **Output:** CSV with columns: Year, TotalC_tCha, AboveGround_tCha, BelowGround_tCha, etc.
 
-### Pipeline 4: Data Processing
+### Pipeline 3: Data Processing
 
 **Modules:**
-- [XML2NC.py](../../XML2NC.py) - Process API cache files
-- [XML2NC_PLO.py](../../XML2NC_PLO.py) - Process PLO files
+- [FullCAM2NC.py](../../FullCAM2NC.py) - Convert simulation results to NetCDF/GeoTIFF
 - [tools/XML2Data.py](../../tools/XML2Data.py) - Parse API cache XML
-- [tools/XML2Data_PLO.py](../../tools/XML2Data_PLO.py) - Parse PLO XML
+- [tools/FullCAM2020_to_NetCDF/](../../tools/FullCAM2020_to_NetCDF/) - Legacy PLO processing
 
 **Purpose:** Convert XML data to NetCDF/GeoTIFF for spatial analysis
 
-**Workflow (XML2NC.py):**
+**Workflow (FullCAM2NC.py):**
 ```python
-1. Load cache index (successful_downloads.txt)
-2. Build coordinate map from cached files
+1. Load cache index via get_existing_downloads()
+2. Get grid coordinates via get_downloading_coords(resfactor)
 3. Extract data using XML2Data functions:
    - get_siteinfo_data() → Climate time series
-   - get_soilbase_data() → Soil parameters
-   - get_soilInit_data() → Initial soil carbon
    - get_carbon_data() → Simulation results
 4. Create xarray DataArrays with spatial dimensions
 5. Export to NetCDF and GeoTIFF formats
 ```
 
 **Key Functions in XML2Data.py:**
-- `parse_siteinfo_data(xml_string)` → xr.Dataset with climate/FPI data
-- `get_siteinfo_data(lat, lon, year=None)` → Load + parse siteInfo file
-- `get_soilbase_data(lat, lon)` → Extract soil parameters
-- `get_soilInit_data(lat, lon, year)` → Extract initial soil carbon
-- `get_carbon_data(lat, lon)` → Load simulation results CSV
-- `export_to_geotiff_with_band_names(arr, output_path, transform)` → Save with metadata
+- `parse_site_data(xml_string)` → xr.Dataset with climate/FPI data
+- `parse_soil_data(xml_string)` → Extract soil clay fraction
+- `parse_init_data(xml_string, tsmd_year)` → Extract initial soil carbon
+- `get_siteinfo_data(lon, lat, tsmd_year)` → Load + parse siteInfo file
+- `get_carbon_data(lon, lat)` → Load simulation results CSV
+- `export_to_geotiff_with_band_names(arr, output_path)` → Save with band names
 
 **Output:** NetCDF/GeoTIFF files in `data/processed/` directory
 
@@ -155,7 +135,7 @@ species_149.23_-36.12.xml
 
 ### Cache Management
 
-**Module:** [tools/cache_manager.py](../../tools/cache_manager.py)
+**Module:** [tools/helpers/cache_manager.py](../../tools/helpers/cache_manager.py)
 
 **Functions:**
 ```python
@@ -165,59 +145,57 @@ verify_cache()          # Check all cached files exist on disk
 ```
 
 **Commands:**
-```bash
+```python
 # Rebuild cache from scratch (one-time slow operation)
-python tools/cache_manager.py rebuild
+from tools.helpers.cache_manager import rebuild_cache
+rebuild_cache()
 
-# Verify cache integrity
-python tools/cache_manager.py verify
+# Load existing downloads
+from tools.helpers.cache_manager import get_existing_downloads
+existing_siteinfo, existing_species, existing_dfs = get_existing_downloads()
 ```
 
 **When to rebuild cache:**
 - Cache file deleted or corrupted
 - Manually copied files from another system
-- After running tools/copy_files.py
 
 ### Thread-Safe Logging
 
-**In get_data.py:**
+**In tools/__init__.py:**
 ```python
-def log_success(filename):
-    """Append to cache file (thread-safe)"""
-    with open('downloaded/successful_downloads.txt', 'a', encoding='utf-8') as f:
-        f.write(f"{filename}\n")
+from threading import Lock
+_cache_write_lock = Lock()
 
-# After successful download
-save_xml(response.content, f"siteInfo_{lon}_{lat}.xml")
-log_success(f"siteInfo_{lon}_{lat}.xml")
+# Thread-safe append to cache file
+with _cache_write_lock:
+    with open(download_records, 'a', encoding='utf-8') as cache:
+        cache.write(f'{filename}\n')
 ```
 
 **Why this works:**
-- File append operations are atomic on most filesystems
+- Uses threading.Lock for proper synchronization
 - Each thread writes a complete line (no partial writes)
-- No file locking needed for simple appends
 
 ## Module Responsibilities
 
 ### Core Modules
 
-| Module | Lines | Responsibilities |
-|--------|-------|------------------|
-| [get_data.py](../../get_data.py) | ~200 | Bulk API download, parallel processing, retry logic, cache management |
-| [get_PLO.py](../../get_PLO.py) | ~100 | PLO generation, API simulation, results saving |
-| [tools/plo_section_functions.py](../../tools/plo_section_functions.py) | ~2000 | 13 section creation functions, XML generation, data loading |
-| [XML2NC.py](../../XML2NC.py) | ~300 | Batch XML→NetCDF conversion, GeoTIFF export, spatial gridding |
-| [XML2NC_PLO.py](../../XML2NC_PLO.py) | ~250 | PLO→NetCDF conversion, similar to XML2NC.py but for PLO files |
+| Module | Responsibilities |
+|--------|------------------|
+| [RUN_FullCAM2024.py](../../RUN_FullCAM2024.py) | Run batch FullCAM simulations |
+| [FullCAM2NC.py](../../FullCAM2NC.py) | Convert results to NetCDF/GeoTIFF |
+| [tools/__init__.py](../../tools/__init__.py) | PLO generation (13 sections), API utilities, data download |
+| [tools/XML2Data.py](../../tools/XML2Data.py) | Parse API cache XML, extract time series |
 
 ### Utility Modules
 
-| Module | Lines | Responsibilities |
-|--------|-------|------------------|
-| [tools/XML2Data.py](../../tools/XML2Data.py) | ~500 | Parse siteInfo/species XML, extract time series, load simulation results |
-| [tools/XML2Data_PLO.py](../../tools/XML2Data_PLO.py) | ~400 | Parse PLO XML, extract Site/Soil/Init sections |
-| [tools/cache_manager.py](../../tools/cache_manager.py) | ~250 | Cache rebuild, verification, utilities |
-| [tools/batch_manipulate_XML.py](../../tools/batch_manipulate_XML.py) | ~100 | Batch XML processing utilities |
-| [tools/get_fullcam_help.py](../../tools/get_fullcam_help.py) | ~800 | FullCAM documentation helper |
+| Module | Responsibilities |
+|--------|------------------|
+| [tools/helpers/cache_manager.py](../../tools/helpers/cache_manager.py) | Cache rebuild, load, utilities |
+| [tools/helpers/batch_manipulate_XML.py](../../tools/helpers/batch_manipulate_XML.py) | Batch XML processing |
+| [tools/helpers/get_fullcam_help.py](../../tools/helpers/get_fullcam_help.py) | FullCAM documentation helper |
+| [tools/FullCAM2020_to_NetCDF/](../../tools/FullCAM2020_to_NetCDF/) | Legacy PLO processing |
+| [tools/Get_data/](../../tools/Get_data/) | Data acquisition (ANUClim, FPI, soil) |
 
 ## Data Flow Diagram
 
@@ -229,18 +207,20 @@ log_success(f"siteInfo_{lon}_{lat}.xml")
           │
           ▼
 ┌──────────────────────────────────────────┐
-│       get_data.py (Bulk Download)        │
-│  • Extract coordinates (5x downsampled)  │
-│  • Parallel API requests (35 threads)    │
-│  • Exponential backoff retry             │
-│  • Thread-safe cache logging             │
+│       tools/__init__.py                  │
+│  • get_downloading_coords() - grid setup │
+│  • get_siteinfo() - download with        │
+│    consensus mechanism                   │
+│  • assemble_plo_sections() - generate    │
+│    complete PLO files                    │
+│  • get_plot_simulation() - run via API   │
 └──────────────┬───────────────────────────┘
                │
                ▼
 ┌──────────────────────────────────────────┐
 │     downloaded/ Directory (Cache)        │
 │  • siteInfo_{lon}_{lat}.xml              │
-│  • species_{lon}_{lat}.xml               │
+│  • df_{lon}_{lat}.csv (simulation)       │
 │  • successful_downloads.txt (index)      │
 └──────┬───────────────────────────────────┘
        │
@@ -248,26 +228,17 @@ log_success(f"siteInfo_{lon}_{lat}.xml")
        │                          │                     │
        ▼                          ▼                     ▼
 ┌──────────────┐      ┌──────────────────┐   ┌─────────────────┐
-│ XML2Data.py  │      │ plo_section_     │   │  get_PLO.py     │
-│              │      │ functions.py     │   │                 │
-│ Parse XML →  │      │ Generate PLO →   │   │ Workflow:       │
-│ xarray       │      │ Assemble 13      │   │ 1. Gen PLO      │
-│              │      │ sections         │   │ 2. Simulate     │
-└──────┬───────┘      └─────────┬────────┘   │ 3. Save CSV     │
-       │                        │             └────────┬────────┘
+│ XML2Data.py  │      │ RUN_FullCAM2024  │   │ FullCAM2NC.py   │
+│              │      │ .py              │   │                 │
+│ Parse XML →  │      │ Batch simulation │   │ Results →       │
+│ xarray       │      │ workflow         │   │ NetCDF/GeoTIFF  │
+└──────┬───────┘      └─────────┬────────┘   └────────┬────────┘
        │                        │                      │
        ▼                        ▼                      ▼
-┌──────────────┐      ┌──────────────────┐   ┌─────────────────┐
-│  XML2NC.py   │      │  FullCAM API     │   │ df_{lat}_{lon}  │
-│              │      │  Simulator       │   │ .csv            │
-│ XML → NetCDF │      │                  │   │ (results)       │
-│ XML → GeoTIF │      │ Returns: CSV     │   └─────────────────┘
-└──────┬───────┘      └─────────┬────────┘
-       │                        │
-       ▼                        ▼
 ┌──────────────────────────────────────────┐
 │     data/processed/ Directory            │
-│  • NetCDF files (time series grids)      │
+│  • siteinfo_RES.nc (climate data)        │
+│  • carbonstock_RES.nc (carbon stocks)    │
 │  • GeoTIFF files (spatial rasters)       │
 └──────────────────────────────────────────┘
 ```
@@ -440,22 +411,20 @@ Example: `data/processed/avgAirTemp_OneKm.nc`
 
 ## Performance Characteristics
 
-### get_data.py (Bulk Download)
+### RUN_FullCAM2024.py (Batch Simulation)
 
 **Typical Performance:**
-- **Coordinates:** ~50,000 Australian locations (5x downsampled)
-- **Threads:** 35 concurrent
-- **Speed:** ~100-200 downloads/minute (depends on API rate limits)
-- **Total Time:** 4-8 hours for full Australia
-- **Retry Logic:** Up to 8 attempts with exponential backoff (2^attempt seconds)
+- **Coordinates:** Configurable via resfactor (10 = ~5,000 locations)
+- **Threads:** 20 concurrent (configurable)
+- **Retry Logic:** Up to 5 attempts with exponential backoff
 
 **Optimization Strategies:**
-1. Cache index lookup: O(n) read at startup, O(1) append per download
-2. Parallel execution: 35× faster than sequential
-3. Early skip: Don't re-download existing files
-4. Exponential backoff: Handle transient network errors gracefully
+1. Cache index lookup via get_existing_downloads()
+2. Parallel execution via joblib.Parallel
+3. Skip already-processed coordinates
+4. Thread-safe cache file updates
 
-### XML2NC.py (Batch Processing)
+### FullCAM2NC.py (Batch Processing)
 
 **Typical Performance:**
 - **Files:** ~100,000 XML files

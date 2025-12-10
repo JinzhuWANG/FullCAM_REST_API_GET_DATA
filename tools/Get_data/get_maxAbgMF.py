@@ -5,28 +5,17 @@ import xarray as xr
 import rioxarray as rio
 import plotnine as p9
 
-from tools.cache_manager import get_existing_downloads
+from tools import get_downloading_coords
+from tools.helpers.cache_manager import get_existing_downloads
 
 
 
-# Config
-RES_factor = 10
 
-# Get resfactored coords
+# Get resfactored coords for downloading
+scrap_coords = get_downloading_coords(resfactor=10).set_index(['x', 'y']).index.tolist()
 existing_siteinfo, existing_species, existing_dfs = get_existing_downloads()
 
-Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True) >= -1 # >=-1 means all Australia continent
-lon_lat = Aus_xr.to_dataframe(name='mask').reset_index()[['y', 'x', 'mask']].round({'x':2, 'y':2})
-lon_lat['cell_idx'] = range(len(lon_lat))
-
-Aus_cell = xr.DataArray(np.arange(Aus_xr.size).reshape(Aus_xr.shape), coords=Aus_xr.coords, dims=Aus_xr.dims)
-Aus_cell_RES = Aus_cell.coarsen(x=RES_factor, y=RES_factor, boundary='trim').max()
-Aus_cell_RES_df = Aus_cell_RES.to_dataframe(name='cell_idx').reset_index()['cell_idx']
-
-RES_df = lon_lat.query('mask == True').loc[lon_lat['cell_idx'].isin(Aus_cell_RES_df)].reset_index(drop=True)
-RES_coords = RES_df.set_index(['x', 'y']).index.tolist()
-
-res_coords = set(existing_siteinfo).intersection(set(RES_coords))
+res_coords = set(existing_siteinfo).intersection(set(scrap_coords))
 res_coords_x = xr.DataArray([coord[0] for coord in res_coords], dims=['cell'])
 res_coords_y = xr.DataArray([coord[1] for coord in res_coords], dims=['cell'])
 
@@ -39,8 +28,13 @@ with zipfile.ZipFile("data/maxAbgMF/Site potential and FPI version 2_0/New_M_201
         engine='rasterio'
     ).sel(band=1, drop=True)
 
+maxAbgMF_data.name = 'data'
+maxAbgMF_data.to_netcdf('data/maxAbgMF/maxAbgMF.nc', encoding={'data': {'zlib': True, 'complevel': 5}})
 
-# Check if maxAbgMF_data is the same as we downloaded before
+
+
+
+# -------------------------------- Plot comparison -------------------------------- 
 maxAbgMF_restfull = (
     xr.open_dataset('data/processed/siteinfo_RES.nc')['maxAbgMF']
     .compute()
@@ -64,13 +58,14 @@ plot_data = (
     .pivot(index=['x', 'y'], columns=['source'], values='maxAbgMF')
     .reset_index()
     .dropna()
-).query('FullCAM < 100')
+)
 
 fig = (
     p9.ggplot()
     + p9.aes(x=plot_data[::100]['FullCAM'], y=plot_data[::100]['Downloaded'])
     + p9.geom_point(alpha=0.3, size=0.5)
     + p9.geom_abline(slope=1, intercept=0, linetype='dashed', color='red')
+    + p9.theme_bw()
     + p9.labs(
         title='Forest Productivity Index (FPI) Comparison: FullCAM vs SoilLandscape',
         x='FPI from FullCAM',

@@ -18,7 +18,8 @@ from pathlib import Path
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 from affine import Affine
-from tools.XML2Data_PLO import (
+from tools import get_downloading_coords
+from tools.FullCAM2020_to_NetCDF import (
     export_to_geotiff_with_band_names,
     get_siteinfo_data,
     get_soilbase_data,
@@ -46,7 +47,7 @@ if not os.path.exists('downloaded/BB_PLO_files.txt'):
 plo_coord_map = {}
 with open('downloaded/BB_PLO_files.txt', 'r', encoding='utf-8') as cache_file:
     lines = cache_file.readlines()
-    for line in tqdm(lines, desc="Building PLO coordinate map"):
+    for line in tqdm(lines):
         filepath = line.strip()
         match = lon_lat_reg_xml.findall(filepath)
         if match:
@@ -54,24 +55,16 @@ with open('downloaded/BB_PLO_files.txt', 'r', encoding='utf-8') as cache_file:
             plo_coord_map[(float(lon), float(lat))] = Path(PLO_dir) / filepath
 
 
+
+
 # ===================== Get Coordinates =====================
-print("Loading Australian coordinate grid...")
-Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True).compute() >= -1
-lon_lat = Aus_xr.to_dataframe(name='mask').reset_index()[['y', 'x', 'mask']].round({'x':2, 'y':2})
-lon_lat['cell_idx'] = range(len(lon_lat))
-
-# Downsample to RES_factor resolution
-Aus_cell = xr.DataArray(np.arange(Aus_xr.size).reshape(Aus_xr.shape), coords=Aus_xr.coords, dims=Aus_xr.dims)
-Aus_cell_RES = Aus_cell.coarsen(x=RES_factor, y=RES_factor, boundary='trim').max()
-Aus_cell_RES_df = Aus_cell_RES.to_dataframe(name='cell_idx').reset_index()['cell_idx']
-
-RES_df = lon_lat.query('mask == True').loc[lon_lat['cell_idx'].isin(Aus_cell_RES_df)].reset_index(drop=True)
+RES_df = get_downloading_coords(resfactor=RES_factor)
 RES_coords = RES_df.set_index(['x', 'y']).index.tolist()
 
-# Get resfactored coords
 available_coords = set(RES_coords).intersection(set(plo_coord_map.keys()))
 sample_lon, sample_lat = next(iter(available_coords))
 sample_plo = plo_coord_map[(sample_lon, sample_lat)]
+
 
 
 # ===================== Setup Spatial Grid =====================
@@ -139,6 +132,7 @@ for var, xarry in siteInfo_full.data_vars.items():
         to_stack_dims = [dim for dim in xarry.dims if dim not in ['y', 'x']]
         xarry = xarry.stack(band=to_stack_dims).astype(np.float32)
     export_to_geotiff_with_band_names(xarry, str(OUTPUT_DIR / f'siteInfo_PLO_{var}_RES_multiband.tif'))
+
 
 
 # ===================== Process SoilBase Data =====================

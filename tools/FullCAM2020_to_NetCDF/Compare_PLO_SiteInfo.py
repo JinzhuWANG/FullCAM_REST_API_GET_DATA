@@ -6,7 +6,8 @@ import rioxarray as rio
 import plotnine as p9
 
 from pathlib import Path
-from tools.cache_manager import get_existing_downloads
+from tools import get_downloading_coords
+from tools.helpers.cache_manager import get_existing_downloads
 
 # ===================== Configuration =====================
 
@@ -15,21 +16,9 @@ RES_factor = 10
 PLO_data_path = Path('N:/Data-Master/FullCAM/FullCAM_REST_API_GET_DATA_2025/data/processed/BB_PLO_OneKm')
 existing_siteinfo, existing_species, existing_dfs = get_existing_downloads()
 
-
-# Get the RES coords
-Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True) >= -1 # >=-1 means all Australia continent
-lon_lat = Aus_xr.to_dataframe(name='mask').reset_index()[['y', 'x', 'mask']].round({'x':2, 'y':2})
-lon_lat['cell_idx'] = range(len(lon_lat))
-
-Aus_cell = xr.DataArray(np.arange(Aus_xr.size).reshape(Aus_xr.shape), coords=Aus_xr.coords, dims=Aus_xr.dims)
-Aus_cell_RES = Aus_cell.coarsen(x=RES_factor, y=RES_factor, boundary='trim').max()
-Aus_cell_RES_df = Aus_cell_RES.to_dataframe(name='cell_idx').reset_index()['cell_idx']
-
-RES_df = lon_lat.query('mask == True').loc[lon_lat['cell_idx'].isin(Aus_cell_RES_df)].reset_index(drop=True)
-RES_coords = RES_df.set_index(['x', 'y']).index.tolist()
-
-# Get valid RES coords
-res_coords = set(existing_siteinfo).intersection(set(RES_coords))
+# Get resfactored coords for downloading
+scrap_coords = get_downloading_coords(resfactor=RES_factor).set_index(['x', 'y']).index.tolist()
+res_coords = set(existing_siteinfo).intersection(set(scrap_coords))
 res_coords_x = xr.DataArray([coord[0] for coord in res_coords], dims=['cell']).astype('float32')
 res_coords_y = xr.DataArray([coord[1] for coord in res_coords], dims=['cell']).astype('float32')
 
@@ -82,16 +71,16 @@ def compare_variable(
 # ---------------------- Compare SiteInfo data ------------------------
 siteInfo_restfull = xr.open_dataset('data/processed/siteinfo_RES.nc').compute().sel(x=res_coords_x, y=res_coords_y, drop=True)
 siteInfo_PLO = xr.open_dataset(PLO_data_path / f'siteinfo_PLO_RES_{RES_factor}.nc').compute()
-siteInfo_PLO
+
 # avgAirTemp
 fig_avgAirTemp = compare_variable(
     siteInfo_restfull,
     siteInfo_PLO,
     'avgAirTemp',
 ) + p9.labs(
-    title='Comparison of avgAirTemp: REST-Full vs PLO',
-    x='FullCAM Data-api avgAirTemp (°C)',
-    y='Archived PLO avgAirTemp (°C)'
+    title='Comparison of avgAirTemp',
+    x='FullCAM Data-API (°C)',
+    y='Brett`s archive (°C)'
 )
 
 # openPanEvap
@@ -100,9 +89,9 @@ fig_openPanEvap = compare_variable(
     siteInfo_PLO,
     'openPanEvap',
 ) + p9.labs(
-    title='Comparison of openPanEvap: REST-Full vs PLO',
-    x='FullCAM Data-api openPanEvap (mm)',
-    y='Archived PLO openPanEvap (mm)'
+    title='Comparison of openPanEvap',
+    x='FullCAM Data-api (mm)',
+    y='Brett`s archive (mm)'
 )
 
 # rainfall
@@ -111,9 +100,9 @@ fig_rainfall = compare_variable(
     siteInfo_PLO,
     'rainfall',
 ) + p9.labs(
-    title='Comparison of rainfall: REST-Full vs PLO',
-    x='FullCAM Data-api rainfall (mm)',
-    y='Archived PLO rainfall (mm)'
+    title='Comparison of rainfall',
+    x='FullCAM Data-api (mm)',
+    y='Brett`s archive (mm)'
 )
 
 # forestProdIx
@@ -123,9 +112,9 @@ fig_forestProdIx = compare_variable(
     'forestProdIx',
     subsample=10
 ) + p9.labs(
-    title='Comparison of forestProdIx: REST-Full vs PLO',
-    x='FullCAM Data-api forestProdIx',
-    y='Archived PLO forestProdIx'
+    title='Comparison of forestProdIx',
+    x='FullCAM Data-api',
+    y='Brett`s archive'
 )
 
 # maxAbgMF
@@ -135,9 +124,9 @@ fig_maxAbgMF = compare_variable(
     'maxAbgMF',
     subsample=1
 ) + p9.labs(
-    title='Comparison of maxAbgMF: REST-Full vs PLO',
-    x='FullCAM Data-api maxAbgMF',
-    y='Archived PLO maxAbgMF'
+    title='Comparison of maxAbgMF',
+    x='FullCAM Data-api ',
+    y='Brett`s archive'
 )
 
 # fpiAvgLT
@@ -147,9 +136,9 @@ fig_fpiAvgLT = compare_variable(
     'fpiAvgLT',
     subsample=1
 ) + p9.labs(
-    title='Comparison of fpiAvgLT: REST-Full vs PLO',
-    x='FullCAM Data-api fpiAvgLT',
-    y='Archived PLO fpiAvgLT'
+    title='Comparison of fpiAvgLT',
+    x='FullCAM Data-api',
+    y='Brett`s archive '
 )
 
 
@@ -190,9 +179,9 @@ fig_clayFrac = (
     p9.geom_abline(slope=1, intercept=0, color='red', linetype='dashed') +
     p9.theme_bw() +
     p9.labs(
-        title='Comparison of clayFrac: REST-Full vs PLO',
-        x='REST-Full clayFrac',
-        y='PLO clayFrac'
+        title='Comparison of clayFrac',
+        x='FullCAM Data-api',
+        y='Brett`s archive'
     )
 )
 
@@ -255,9 +244,9 @@ fig_rpmaCMInitF = (
     p9.geom_abline(slope=1, intercept=0, color='red', linetype='dashed') +
     p9.theme_bw() +
     p9.labs(
-        title='Comparison of rpmaCMInitF: REST-Full vs PLO',
-        x='REST-Full rpmaCMInitF',
-        y='PLO rpmaCMInitF'
+        title='Comparison of rpmaCMInitF',
+        x='FullCAM rpmaCMInitF',
+        y='Brett`s archive'
     )
 )
 
@@ -280,9 +269,9 @@ fig_humsCMInitF = (
     p9.geom_abline(slope=1, intercept=0, color='red', linetype='dashed') +
     p9.theme_bw() +
     p9.labs(
-        title='Comparison of humsCMInitF: REST-Full vs PLO',
-        x='REST-Full humsCMInitF',
-        y='PLO humsCMInitF'
+        title='Comparison of humsCMInitF',
+        x='FullCAM humsCMInitF',
+        y='Brett`s archive'
     )
 )
 
@@ -305,9 +294,9 @@ fig_inrtCMInitF = (
     p9.geom_abline(slope=1, intercept=0, color='red', linetype='dashed') +
     p9.theme_bw() +
     p9.labs(
-        title='Comparison of inrtCMInitF: REST-Full vs PLO',
-        x='REST-Full inrtCMInitF',
-        y='PLO inrtCMInitF'
+        title='Comparison of inrtCMInitF',
+        x='FullCAM inrtCMInitF',
+        y='Brett`s archive'
     )
 )
 
@@ -330,34 +319,9 @@ fig_TSMDInitF = (
     p9.geom_abline(slope=1, intercept=0, color='red', linetype='dashed') +
     p9.theme_bw() +
     p9.labs(
-        title='Comparison of TSMDInitF: REST-Full vs PLO',
-        x='REST-Full TSMDInitF',
-        y='PLO TSMDInitF'
+        title='Comparison of TSMDInitF',
+        x='FullCAM TSMDInitF',
+        y='Brett`s archive'
     )
 )
 
-
-# TSMDInitF 
-plt_data_TSMDInitF = xr.merge([
-    soilOther_restfull.sel(band='TSMDInitF').rename('restfull'),
-    soilOther_PLO.sel(band='TSMDInitF').rename('PLO')
-], join='inner').to_dataframe().reset_index().dropna()
-
-fig_TSMDInitF = (
-    p9.ggplot() +
-    p9.geom_point(
-        p9.aes(
-            x=plt_data_TSMDInitF['restfull'],
-            y=plt_data_TSMDInitF['PLO']
-        ),
-        alpha=0.1,
-        size=0.05
-    ) +
-    p9.geom_abline(slope=1, intercept=0, color='red', linetype='dashed') +
-    p9.theme_bw() +
-    p9.labs(
-        title='Comparison of TSMDInitF: REST-Full vs PLO',
-        x='REST-Full TSMDInitF',
-        y='PLO TSMDInitF'
-    )
-)

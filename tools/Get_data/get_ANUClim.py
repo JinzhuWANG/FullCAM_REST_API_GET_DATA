@@ -15,7 +15,9 @@ from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 from pathlib import Path
 
-from tools.cache_manager import get_existing_downloads
+from tools import get_downloading_coords
+from tools.helpers.cache_manager import get_existing_downloads
+
 
 
 ######################################################################################
@@ -224,27 +226,11 @@ combined_ds.to_netcdf(
 #                        Compare ANUClim data with FullCAM                           #
 ######################################################################################
 
-
-# Config
-RES_factor = 10
-soil_path = Path('data/Soil_landscape_AUS/ClayContent/000055684v002/data')
-
-# --------------- Get valid coords ---------------
-PLO_data_path = Path('N:/Data-Master/FullCAM/FullCAM_REST_API_GET_DATA_2025/data/processed/BB_PLO_OneKm')
+# Get resfactored coords for downloading
+scrap_coords = get_downloading_coords(resfactor=10).set_index(['x', 'y']).index.tolist()
 existing_siteinfo, existing_species, existing_dfs = get_existing_downloads()
 
-Aus_xr = rxr.open_rasterio("data/lumap.tif").sel(band=1, drop=True) >= -1 # >=-1 means all Australia continent
-lon_lat = Aus_xr.to_dataframe(name='mask').reset_index()[['y', 'x', 'mask']].round({'x':2, 'y':2})
-lon_lat['cell_idx'] = range(len(lon_lat))
-
-Aus_cell = xr.DataArray(np.arange(Aus_xr.size).reshape(Aus_xr.shape), coords=Aus_xr.coords, dims=Aus_xr.dims)
-Aus_cell_RES = Aus_cell.coarsen(x=RES_factor, y=RES_factor, boundary='trim').max()
-Aus_cell_RES_df = Aus_cell_RES.to_dataframe(name='cell_idx').reset_index()['cell_idx']
-
-RES_df = lon_lat.query('mask == True').loc[lon_lat['cell_idx'].isin(Aus_cell_RES_df)].reset_index(drop=True)
-RES_coords = RES_df.set_index(['x', 'y']).index.tolist()
-
-res_coords = set(existing_siteinfo).intersection(set(RES_coords))
+res_coords = set(existing_siteinfo).intersection(set(scrap_coords))
 res_coords_x = xr.DataArray([coord[0] for coord in res_coords], dims=['cell'])
 res_coords_y = xr.DataArray([coord[1] for coord in res_coords], dims=['cell'])
 

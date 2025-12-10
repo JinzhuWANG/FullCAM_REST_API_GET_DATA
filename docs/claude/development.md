@@ -17,27 +17,24 @@ Common workflows, code patterns, and examples for working with the FullCAM REST 
 **Use case:** Generate PLO for one location using cached data
 
 ```python
-from tools.plo_section_functions import assemble_plo_sections
+from tools import assemble_plo_sections
 
 # Specify location and start year
 lon, lat = 148.16, -35.61  # Canberra region
 year_start = 2010
 
 # Generate complete PLO file
-# (automatically loads from downloaded/siteInfo_*.xml and downloaded/species_*.xml)
-plo_xml = assemble_plo_sections(lon, lat, year_start)
+# (automatically loads from downloaded/siteInfo_*.xml or downloads if missing)
+plo_xml = assemble_plo_sections(lon, lat, year_start=year_start)
 
 # Save to file
 with open("canberra_plot.plo", "w", encoding="utf-8") as f:
     f.write(plo_xml)
 
-print("✓ PLO file generated successfully!")
+print("PLO file generated successfully!")
 ```
 
-**Prerequisites:**
-- Run `get_data.py` first to download cache data for this location
-- Ensure `downloaded/siteInfo_148.16_-35.61.xml` exists
-- Ensure `downloaded/species_148.16_-35.61.xml` exists
+**Note:** Data will be auto-downloaded if not cached. Species template is loaded from `data/dataholder_species_*.xml`.
 
 ### Workflow 2: Generate PLO and Run Simulation
 
@@ -48,7 +45,7 @@ import requests
 import pandas as pd
 from io import StringIO
 import os
-from tools.plo_section_functions import assemble_plo_sections
+from tools import assemble_plo_sections, get_plot_simulation
 
 # Configuration
 API_KEY = os.getenv("FULLCAM_API_KEY")
@@ -84,7 +81,7 @@ else:
     print(response.text)
 ```
 
-**See:** [get_PLO.py](../../get_PLO.py) for complete working example
+**See:** [RUN_FullCAM2024.py](../../RUN_FullCAM2024.py) for complete working example
 
 ### Workflow 3: Batch Process Multiple Locations
 
@@ -92,7 +89,7 @@ else:
 
 ```python
 import pandas as pd
-from tools.plo_section_functions import assemble_plo_sections
+from tools import assemble_plo_sections
 
 # Load locations from CSV
 locations = pd.DataFrame({
@@ -374,7 +371,7 @@ success_count = sum(1 for r in results if r == "Success")
 print(f"✓ Downloaded {success_count}/{len(locations)} locations")
 ```
 
-**See:** [get_data.py](../../get_data.py) for production-ready implementation
+**See:** [RUN_FullCAM2024.py](../../RUN_FullCAM2024.py) for production-ready implementation
 
 ### Pattern: Convert XML to NetCDF/GeoTIFF
 
@@ -386,7 +383,7 @@ import xarray as xr
 import rioxarray as rio
 from affine import Affine
 from tools.XML2Data import get_siteinfo_data, export_to_geotiff_with_band_names
-from tools.cache_manager import get_existing_downloads
+from tools.helpers.cache_manager import get_existing_downloads
 
 # Load cache index
 existing_siteinfo, _, _ = get_existing_downloads()
@@ -442,7 +439,7 @@ export_to_geotiff_with_band_names(temp_annual, 'avgAirTemp_2020_annual.tif', tra
 print("✓ Exported NetCDF and GeoTIFF")
 ```
 
-**See:** [XML2NC.py](../../XML2NC.py) for production-ready implementation
+**See:** [FullCAM2NC.py](../../FullCAM2NC.py) for production-ready implementation
 
 ## Data Processing Workflows
 
@@ -486,7 +483,7 @@ print(f"Average sequestration rate: {df['Sequestration_tCha_yr'].mean():.2f} tC/
 **Use case:** Generate and compare multiple PLO scenarios
 
 ```python
-from tools.plo_section_functions import assemble_plo_sections
+from tools import assemble_plo_sections
 import requests
 import pandas as pd
 from io import StringIO
@@ -546,7 +543,7 @@ plt.savefig('scenario_comparison.png', dpi=300)
 
 ```python
 import numpy as np
-from tools.plo_section_functions import assemble_plo_sections
+from tools import assemble_plo_sections
 
 # Define grid
 lat_min, lat_max = -37.0, -34.0
@@ -645,17 +642,15 @@ Run get_data.py first to download cache data
 **Solution:**
 1. Check cache index:
    ```python
-   from tools.cache_manager import get_existing_downloads
+   from tools.helpers.cache_manager import get_existing_downloads
    siteinfo, species, _ = get_existing_downloads()
    print(f"siteInfo_148.16_-35.61.xml in cache: {'siteInfo_148.16_-35.61.xml' in siteinfo}")
    ```
 
-2. Download data for this location:
-   ```bash
-   # Option A: Run full bulk download
-   python get_data.py
-
-   # Option B: Download single location (see Workflow 4 above)
+2. Data will be auto-downloaded when you call `assemble_plo_sections()`, or you can download manually:
+   ```python
+   from tools import get_siteinfo
+   get_siteinfo(lat=-35.61, lon=148.16)
    ```
 
 ### Issue: Time series count mismatch in PLO
@@ -729,8 +724,9 @@ for ts in root.findall('.//TimeSeries'):
 
 **Solution:** Rebuild cache index:
 
-```bash
-python tools/cache_manager.py rebuild
+```python
+from tools.helpers.cache_manager import rebuild_cache
+rebuild_cache()
 ```
 
 **Explanation:** Cache file may be corrupted or out of sync. Rebuilding scans `downloaded/` directory and recreates `successful_downloads.txt`.
@@ -768,11 +764,11 @@ if species is not None:
 **Solution:** Regenerate PLO with correct forest category:
 
 ```python
-from tools.plo_section_functions import assemble_plo_sections
+from tools import assemble_plo_sections
 
-# Correct: Use Plantation for commercial Eucalyptus
-plo_xml = assemble_plo_sections(lon, lat, year_start)
-# (assemble_plo_sections uses frCat="Plantation" by default)
+# Correct: Use appropriate species template
+plo_xml = assemble_plo_sections(lon, lat, species='Eucalyptus_globulus', year_start=year_start)
+# Available species: Eucalyptus_globulus, Mallee_eucalypt, Environmental_plantings
 ```
 
 ### Issue: Missing required time series
@@ -807,9 +803,9 @@ If missing, regenerate PLO (check cache files have complete data).
 
 ### Code Organization
 
-1. **Separate data download from analysis**
-   - Run `get_data.py` once as setup
-   - Use `assemble_plo_sections()` for analysis
+1. **Use assemble_plo_sections() for PLO generation**
+   - Data is auto-downloaded when missing
+   - Use `get_existing_downloads()` to check cached data
 
 2. **Use cache management utilities**
    - Don't scan `downloaded/` directory directly

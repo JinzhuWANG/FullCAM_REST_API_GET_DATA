@@ -11,29 +11,30 @@ Complete reference for functions, FullCAM API endpoints, and utilities.
 
 ## PLO Generation Functions
 
-All functions in [tools/plo_section_functions.py](../../tools/plo_section_functions.py)
+All functions in [tools/__init__.py](../../tools/__init__.py)
 
 ### Primary Function
 
-#### `assemble_plo_sections(lon, lat, year_start=2010)`
+#### `assemble_plo_sections(lon, lat, species='Eucalyptus_globulus', year_start=2010)`
 
-Generate complete PLO file from cached API data.
+Generate complete PLO file from cached API data and templates.
 
 **Parameters:**
 - `lon` (float): Longitude in decimal degrees (required)
 - `lat` (float): Latitude in decimal degrees (required)
+- `species` (str, optional): Species template name (default: 'Eucalyptus_globulus')
+  - Available: 'Eucalyptus_globulus', 'Mallee_eucalypt', 'Environmental_plantings'
 - `year_start` (int, optional): Simulation start year (default: 2010)
 
 **Returns:** str - Complete PLO XML string ready for simulation
 
-**Raises:**
-- `FileNotFoundError`: If required cache files don't exist
-  - `downloaded/siteInfo_{lon}_{lat}.xml`
-  - `downloaded/species_{lon}_{lat}.xml`
+**Behavior:**
+- If `downloaded/siteInfo_{lon}_{lat}.xml` doesn't exist, auto-downloads from API
+- Species parameters loaded from `data/dataholder_species_{species}.xml`
 
 **Example:**
 ```python
-from tools.plo_section_functions import assemble_plo_sections
+from tools import assemble_plo_sections
 
 plo_xml = assemble_plo_sections(lon=148.16, lat=-35.61, year_start=2010)
 
@@ -43,14 +44,14 @@ with open("plot.plo", "w", encoding="utf-8") as f:
 ```
 
 **Data Requirements:**
-- Run `get_data.py` first to populate cache
 - Template files in `data/dataholder_*.xml` (8 files)
+- Species templates in `data/dataholder_species_*.xml` (3 files)
 
 **What it does internally:**
-1. Loads climate time series from `siteInfo_{lon}_{lat}.xml`
-2. Loads species parameters from `species_{lon}_{lat}.xml`
+1. Loads/downloads climate time series from `siteInfo_{lon}_{lat}.xml`
+2. Loads species template from `data/dataholder_species_{species}.xml`
 3. Calculates initial TSMD (Top Soil Moisture Deficit) for start year
-4. Merges with templates from `data/dataholder_*.xml`
+4. Merges with section templates from `data/dataholder_*.xml`
 5. Assembles 13 sections into complete PLO file
 6. Returns XML string with declaration and root wrapper
 
@@ -300,7 +301,7 @@ Generate other_info section (economic, sensitivity, optimization settings).
 
 ## Data Extraction Functions
 
-Functions in [tools/XML2Data.py](../../tools/XML2Data.py) and [tools/XML2Data_PLO.py](../../tools/XML2Data_PLO.py)
+Functions in [tools/XML2Data.py](../../tools/XML2Data.py) and [tools/FullCAM2020_to_NetCDF/__init__.py](../../tools/FullCAM2020_to_NetCDF/__init__.py)
 
 ### XML2Data.py (API Cache Files)
 
@@ -449,20 +450,19 @@ transform = Affine(0.1, 0, 110.0, 0, -0.1, -10.0)  # 0.1° resolution
 export_to_geotiff_with_band_names(arr, 'output.tif', transform)
 ```
 
-### XML2Data_PLO.py (PLO Files)
+### FullCAM2020_to_NetCDF (PLO Files)
 
-Similar functions but parse PLO XML structure instead of API cache:
+Legacy PLO file processing functions in [tools/FullCAM2020_to_NetCDF/__init__.py](../../tools/FullCAM2020_to_NetCDF/__init__.py):
 
-- `parse_siteinfo_data(xml_string)` - Parse Site section from PLO
-- `get_siteinfo_data(lat, lon, year)` - Load from PLO file
-- `get_soilbase_data(lat, lon)` - Extract Soil section
-- `get_soilInit_data(lat, lon, year)` - Extract Init section
+- `get_siteinfo_data(plo_path)` - Parse Site section from PLO file
+- `get_soilbase_data(plo_path)` - Extract Soil section
+- `get_soilInit_data(plo_path)` - Extract Init section
 
-**Difference:** These functions parse `<DocumentPlot>` XML instead of API response XML.
+**Difference:** These functions parse `<DocumentPlot>` XML from PLO files instead of API response XML.
 
 ## Cache Management Functions
 
-Functions in [tools/cache_manager.py](../../tools/cache_manager.py)
+Functions in [tools/helpers/cache_manager.py](../../tools/helpers/cache_manager.py)
 
 #### `get_existing_downloads() -> tuple[set, set, set]`
 

@@ -1,6 +1,15 @@
 <Soil>
     <SoilBase>
-        <!-- Data should be replaced during assembling PLO file -->
+        <SoilZap id="forest" maxBiofNCRatio="" maxBiosNCRatio="" maxHumsNCRatio="" minBiofNCRatio="" minBiosNCRatio="" minHumsNCRatio="" fracHumfSopmToDpma="0.9" fracHumfLrpmToRpma="0.9" fracHumfMrpmToRpma="0.9" fracHumfSommToDpma="0.9" fracHumfLrmmToRpma="0.9" fracHumfMrmmToRpma="0.9" fracHumfMicrToXpma="0.9" fracDLitBkdnToDpma="1.0" fracRLitBkdnToRpma="1.0" dToRRatioInPres="0.2" doManuFromOffs="false" fracManuCMToDpma="0.49" fracManuCMToRpma="0.49" fracManuCMToBiof="0.0" fracManuCMToBios="0.0" manuDpmaNCRatio="100.0" manuRpmaNCRatio="100.0" manuBiofNCRatio="100.0" manuBiosNCRatio="100.0" manuHumsNCRatio="100.0" encpFracHums="0.0" sampleDepth="30.0" pH="6.0" evapoOpenRatio="0.75" bToCMaxTSMDRatio="0.556" sdcmRateMultDpma="10.0" sdcmRateMultRpma="0.17" sdcmRateMultBiofV263="0.66" sdcmRateMultBiosV263="0.66" sdcmRateMultHums="0.03" sdcmRateMultBiomCov="3.25" fracPbioToBiofV263="0.46" fracPbioToBiofV265="0.28" fracPbioToBiosV265="0.18" fracHumsToBiosV263="0.46" fracHumsToBiofV265="0.28" fracHumsToBiosV265="0.18" richNCRatio="0.01" poorNCRatio="0.001" fracDpmaToStorMyco="0.0" fracRpmaToStorMyco="0.0" fracBiofToStorMyco="0.0" fracBiosToStorMyco="0.0"/>
+        <SoilZap id="agriculture" maxBiofNCRatio="" maxBiosNCRatio="" maxHumsNCRatio="" minBiofNCRatio="" minBiosNCRatio="" minHumsNCRatio="" fracHumfSopmToDpma="0.9" fracHumfLrpmToRpma="0.9" fracHumfMrpmToRpma="0.9" fracHumfSommToDpma="0.9" fracHumfLrmmToRpma="0.9" fracHumfMrmmToRpma="0.9" fracHumfMicrToXpma="0.9" fracDLitBkdnToDpma="1.0" fracRLitBkdnToRpma="1.0" dToRRatioInPres="0.2" doManuFromOffs="false" fracManuCMToDpma="0.49" fracManuCMToRpma="0.49" fracManuCMToBiof="0.0" fracManuCMToBios="0.0" manuDpmaNCRatio="100.0" manuRpmaNCRatio="100.0" manuBiofNCRatio="100.0" manuBiosNCRatio="100.0" manuHumsNCRatio="100.0" encpFracHums="0.0" sampleDepth="30.0" pH="6.0" evapoOpenRatio="0.75" bToCMaxTSMDRatio="0.556" sdcmRateMultDpma="10.0" sdcmRateMultRpma="0.17" sdcmRateMultBiofV263="0.66" sdcmRateMultBiosV263="0.66" sdcmRateMultHums="0.03" sdcmRateMultBiomCov="3.25" fracPbioToBiofV263="0.46" fracPbioToBiofV265="0.28" fracPbioToBiosV265="0.18" fracHumsToBiosV263="0.46" fracHumsToBiofV265="0.28" fracHumsToBiosV265="0.18" richNCRatio="0.01" poorNCRatio="0.001" fracDpmaToStorMyco="0.0" fracRpmaToStorMyco="0.0" fracBiofToStorMyco="0.0" fracBiosToStorMyco="0.0"/>
+
+
+        <!-- Only `clayFrac` is a valid value, which will be replaced by Data-API -->
+        <SoilOther id="other" clayFrac="" bulkDensity="1.42" tSoil="ClayLoam" maxASW="300.0"/>
+
+
+
+
     </SoilBase>
     <TimeSeries tInTS="soilCover" tExtrapTS="AvgYr" tOriginTS="Calendar" yr0TS="2010" nYrsTS="1" dataPerYrTS="1" nDecPlacesTS="1" colWidthTS="50" multTS="1.0" showGraphTS="true">
         <WinState L="10" T="83" clientW="702" clientH="450" ws="Normal"/>

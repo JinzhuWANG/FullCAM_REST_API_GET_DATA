@@ -93,8 +93,8 @@ fig = (
     + p9.geom_abline(slope=1, intercept=0, color='red', linetype='dashed')
     + p9.labs(
         title='Soil Clay Fraction (0-30cm) Comparison',
-        x='Clay Fraction FullCAM',
-        y='Clay Fraction Downloaded'
+        x='FullCAM Clay-Fraction',
+        y='Jinzhu calculated Clay-Fraction'
     )
     + p9.theme_bw()
 )
