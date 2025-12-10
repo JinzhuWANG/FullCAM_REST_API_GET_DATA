@@ -228,12 +228,22 @@ def get_species(lat, lon, try_number=10, download_records='downloaded/successful
 
 
 
-def get_plot_simulation(lon, lat, url, headers,  try_number=5, timeout=60, download_records='downloaded/successful_downloads.txt'):
+def get_plot_simulation(
+    data_source:str, 
+    lon:float, 
+    lat:float, 
+    data_obj:xr.Dataset, 
+    url:str,
+    headers:dict,  
+    try_number:int=5, 
+    timeout:int=60, 
+    download_records:str='downloaded/successful_downloads.txt'
+):
 
     # Re-attempt assembly after redownloading
     for attempt in range(try_number):
         try:
-            plo_str = assemble_plo_sections(lon, lat, 'Eucalyptus_globulus', 2010)
+            plo_str = assemble_plo_sections(data_source, lon, lat, data_obj, 'Eucalyptus_globulus', 2010)
                         
             response = requests.post(
                 url, 
@@ -250,10 +260,8 @@ def get_plot_simulation(lon, lat, url, headers,  try_number=5, timeout=60, downl
                 with _cache_write_lock:
                     with open(download_records, 'a', encoding='utf-8') as cache:
                         cache.write(f'df_{lon}_{lat}.csv\n')
-                        
-                print(f"Successfully downloaded plot simulation for ({lon}, {lat})")
-                
                 return 
+            
             else:
                 # HTTP error - apply backoff before retry
                 if attempt < try_number - 1:
@@ -263,8 +271,6 @@ def get_plot_simulation(lon, lat, url, headers,  try_number=5, timeout=60, downl
             if attempt < try_number - 1:
                 time.sleep(2**attempt)
     
-    # All attempts failed  
-    print(f"Failed to download plot simulation for ({lon}, {lat}) after {try_number} attempts.")
 
 # ============================================================================
 # SECTION CREATION FUNCTIONS
@@ -516,25 +522,20 @@ def create_site_section(
     data_source: str = "API",
     lon: float = None,
     lat: float = None,
+    data_obj: xr.DataArray = None
 ) -> str:
     """
     Create Site section for PLO file with site parameters and time series.
 
     Parameters
     ----------
-    data_source : str, optional
-        Source of site data: "API" or "Cache" (default: "API").
-         - "API" : Load site data from FULLCAM Data Builder API using provided lon/lat.
-         - "Cache" : Load site data from local cache files in 'downloaded/' directory.
-    lon : float, optional
-        Longitude for API data loading. If provided with lat, loads site data
-        from 'downloaded/siteInfo_{lon}_{lat}.xml' and auto-populates time series,
-        fpiAvgLT, and maxAbgMF parameters (default: None).
-
-    lat : float, optional
-        Latitude for API data loading. Must be provided with lon for API mode
-        (default: None).
-
+    data_source (str): Source of site data: "API" or "Cache".
+        - "API": Load site data from FULLCAM Data Builder API using provided lon/lat.
+        - "Cache": Load site data from local cache files in 'downloaded/' directory.
+    lon (float): Longitude of the site.
+    lat (float): Latitude of the site.
+    data_obj (xr.DataArray): Optional xarray DataArray for site data when using "Cache" mode.
+    
     Returns
     -------
     str
@@ -542,19 +543,16 @@ def create_site_section(
     
     """
     
+    if data_source == "API":        # API Data Mode: Load from downloaded files
+        file_path = f'downloaded/siteInfo_{lon}_{lat}.xml'
+        with open(file_path, 'r', encoding='utf-8') as f:
+            parsed_data = parse_site_data(f.read())
 
-    # API Data Mode: Load from downloaded files
-    file_path = f'downloaded/siteInfo_{lon}_{lat}.xml'
-
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(
-            f"Required file '{file_path}' not found! "
-            f"Run get_data.py to download site data for coordinates ({lat}, {lon})."
-        )
-
-    # Parse XML tree
-    with open(file_path, 'r', encoding='utf-8') as f:
-        parsed_data = parse_site_data(f.read())
+    elif data_source == "Cache":    # Cache Data Mode: Load from local cache (xarray dataset)
+        parsed_data = data_obj.sel(x=lon, y=lat, method='nearest', drop=True)
+    else:
+        raise ValueError(f"data_source '{data_source}' not recognized. Use 'API' or 'Cache'.")
+        
         
     # Parse data holder XML 
     holder_root = etree.parse('data/dataholder_site.xml').getroot()
@@ -625,35 +623,46 @@ def create_species_section(species) -> str:
     )
 
 
-def create_soil_section(lon:float, lat:float, yr0TS):
+def create_soil_section(
+    data_source:str = 'API', 
+    lon:float=None, 
+    lat:float=None, 
+    data_obj:xr.Dataset=None,
+    yr0TS:int=None
+) -> str:
     '''
     Create the Soil section of the PLO file by replacing the SoilBase and soilCover TimeSeries
     with site-specific data downloaded from the FULLCAM API.
     Parameters:
+        data_source (str): Source of site data: "API" or "Cache".
+            - "API": Load site data from FULLCAM Data Builder API using provided lon/lat.
+            - "Cache": Load site data from local cache files in 'downloaded/' directory.
         lon (float): Longitude of the site.
         lat (float): Latitude of the site.
+        data_obj (xr.Dataset): Optional xarray Dataset for site data when using "Cache" mode.
+        yr0TS (int): Year to set as yr0TS attribute in TimeSeries elements.
         
     Returns:
         str: The Soil section as an XML string.
     '''
     
+    if data_source == "API":        # API Data Mode: Load from downloaded files
+        file_path = f'downloaded/siteInfo_{lon}_{lat}.xml'
+        with open(file_path, 'r', encoding='utf-8') as f:
+            parsed_data = parse_soil_data(f.read())
+    elif data_source == "Cache":    # Cache Data Mode: Load from local cache (xarray dataset)
+        parsed_data = data_obj.sel(x=lon, y=lat, method='nearest', drop=True).compute()
+    else:
+        raise ValueError(f"data_source '{data_source}' not recognized. Use 'API' or 'Cache'.")
+    
+    
+    # Read soil template
     holder_soil = etree.parse("data/dataholder_soil.xml").getroot()
 
-    # Replace SoilBase in holder_soil with site-specific soil data
-    file_path = f'downloaded/siteInfo_{lon}_{lat}.xml'
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(
-            f"Required file '{file_path}' not found! "
-            f"Run get_data.py to download species data for coordinates ({lat}, {lon})."
-        )
-    
-    # Parse siteinfo XML
-    with open(file_path, 'r', encoding='utf-8') as f:
-        soil_data = parse_soil_data(f.read())['clayFrac'].item()
-        
     # Update SoilBase element
     #   Currently only need to update the `clayFrac` value
-    holder_soil.xpath('.//SoilOther')[0].set('clayFrac', str(soil_data))
+    clayFrac = parsed_data['clayFrac'].item()
+    holder_soil.xpath('.//SoilOther')[0].set('clayFrac', str(clayFrac))
     
     # Also, need to update the `yr0TS` attribute of all 'TimeSeries' elements 
     for ts in holder_soil.findall('.//TimeSeries'):
@@ -663,34 +672,42 @@ def create_soil_section(lon:float, lat:float, yr0TS):
     return etree.tostring(holder_soil, encoding='unicode')
 
 
-def create_init_section(lon: float, lat: float, tsmd_year):
+def create_init_section(
+    data_source:str='API', 
+    lon: float=None, 
+    lat: float=None, 
+    data_obj:xr.Dataset=None,
+    tsmd_year:int=None
+) -> str:
     '''
     Create the Init section of the PLO file by reading siteinfo data and calculating
     soil carbon pool values, then updating dataholder_init.xml with these values.
 
     Parameters:
+        data_source (str): Source of site data: "API" or "Cache".
+            - "API": Load site data from FULLCAM Data Builder API using provided lon/lat.
+            - "Cache": Load site data from local cache files in 'downloaded/' directory.
         lon (float): Longitude of the site.
         lat (float): Latitude of the site.
+        data_obj (xr.Dataset): Optional xarray Dataset for site data when using "Cache" mode.
         tsmd_year (int): Year to use for TSMD initial value extraction.
 
     Returns:
         str: The Init section as an XML string with updated soil carbon values.
     '''
+    
+    if data_source == "API":        # API Data Mode: Load from downloaded files
+        file_path = f'downloaded/siteInfo_{lon}_{lat}.xml'
+        with open(file_path, 'r', encoding='utf-8') as f:
+            soil_init = parse_init_data(f.read(), tsmd_year)
+    elif data_source == "Cache":    # Cache Data Mode: Load from local cache (xarray dataset)
+        soil_init = data_obj.sel(x=lon, y=lat, method='nearest', drop=True).compute()
+    else:
+        raise ValueError(f"data_source '{data_source}' not recognized. Use 'API' or 'Cache'.")
+
 
     # Load the dataholder_init.xml template
     holder_init = etree.parse("data/dataholder_init.xml").getroot()
-
-    # Construct the siteinfo file path
-    file_path = f'downloaded/siteInfo_{lon}_{lat}.xml'
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(
-            f"Required file '{file_path}' not found! "
-            f"Run get_data.py to download site data for coordinates ({lat}, {lon})."
-        )
-
-    # Extract soilInit data from siteinfo file
-    with open(file_path, 'r', encoding='utf-8') as f:
-        soil_init = parse_init_data(f.read(), tsmd_year)
 
     # Update InitSoilF element
     init_soil_f = holder_init.xpath('.//InitSoilF')[0]
@@ -854,15 +871,28 @@ def create_other_info_section() -> str:
 
 
 
-def assemble_plo_sections(lon, lat, species:str='Eucalyptus_globulus', year_start=2010):
+def assemble_plo_sections(
+    data_source:str='Cache', 
+    lon:float=None, 
+    lat:float=None, 
+    data_obj:xr.Dataset=None,
+    species:str='Eucalyptus_globulus', 
+    year_start=2010, 
+) -> str:
     """Assemble all sections of a PLO file for given lon/lat.
 
     Parameters
     ----------
+    data_source : str, optional
+        Source of site data: "API" or "Cache" (default is 'Cache').
+        - "API": Load site data from FULLCAM Data Builder API using provided lon/lat.
+        - "Cache": Load site data from local cache files in 'downloaded/' directory.
     lon : float
         Longitude of the plot.
     lat : float
         Latitude of the plot.
+    data_obj : xr.Dataset, optional
+        Optional xarray Dataset for site data when using "Cache" mode.
     species : str, optional
         Species name for the simulation (default is 'Eucalyptus_globulus').
         Currently supported species:
@@ -871,18 +901,21 @@ def assemble_plo_sections(lon, lat, species:str='Eucalyptus_globulus', year_star
          - 'Environmental_plantings'
     year_start : int, optional
         The starting year for the simulation (default is 2010).
-        
+    
     Returns
     -------
     dict
         A dictionary containing all sections of the PLO file as XML strings.
     """
     
-    site_file = f'downloaded/siteInfo_{lon}_{lat}.xml'
-    
-    if not os.path.exists(site_file):
-        print(f'Downloaded site file for {site_file}!')
-        get_siteinfo(lat, lon)
+    if data_source not in ['API', 'Cache']:
+        raise ValueError(f"data_source '{data_source}' not recognized. Use 'API' or 'Cache'.")
+
+    if data_source == 'API':
+        site_file = f'downloaded/siteInfo_{lon}_{lat}.xml'
+        if not os.path.exists(site_file):
+            get_siteinfo(lat, lon)
+            print(f'Downloaded site file: {site_file}')
 
     return (f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
             f'<DocumentPlot FileType="FullCAM Plot " Version="5009" pageIxDO="10" tDiagram="-1">'
@@ -890,10 +923,10 @@ def assemble_plo_sections(lon, lat, species:str='Eucalyptus_globulus', year_star
                 f'{create_config_section()}\n'
                 f'{create_timing_section()}\n'
                 f'{create_build_section(lon, lat)}\n'
-                f'{create_site_section(lon, lat)}\n'
+                f'{create_site_section(data_source, lon, lat, data_obj)}\n'
                 f'{create_species_section(species)}\n'
-                f'{create_soil_section(lon, lat, yr0TS=year_start)}\n'
-                f'{create_init_section(lon, lat, tsmd_year=year_start)}\n'
+                f'{create_soil_section(data_source, lon, lat, data_obj, year_start)}\n'
+                f'{create_init_section(data_source, lon, lat, data_obj, year_start)}\n'
                 f'{create_event_section()}\n'
                 f'{create_outwinset_section()}\n'
                 f'{create_logentryset_section()}\n'

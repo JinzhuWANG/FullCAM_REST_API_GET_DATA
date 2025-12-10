@@ -2,7 +2,6 @@ import numpy as np
 import xarray as xr
 import rioxarray as rio
 
-from tools import get_downloading_coords
 from scipy.ndimage import distance_transform_edt
 from tqdm.auto import tqdm
 from joblib import Parallel, delayed
@@ -100,6 +99,7 @@ soil_init = (
     .isel(band=range(0,7))
     .sel(band=['rpmaCMInitF','humsCMInitF','inrtCMInitF','TSMDInitF'])
     .compute()
+    .drop_vars('spatial_ref')
 )
 
 
@@ -117,12 +117,22 @@ for band in ['rpmaCMInitF','humsCMInitF','inrtCMInitF','TSMDInitF']:
 #                  Save assembled data to file                             #
 ############################################################################
 
+# Build encoding with chunking: x,y = 256, other dims = full size
+encoding = {}
+for var in siteInfo_fill.data_vars:
+    dims = siteInfo_fill[var].dims
+    chunks = []
+    for dim in dims:
+        if dim in ('x', 'y'):
+            chunks.append(256)
+        else:
+            chunks.append(siteInfo_fill.sizes[dim])  # Full size for other dims
+    encoding[var] = {'zlib': True, 'complevel': 4, 'chunksizes': tuple(chunks)}
+    
+    
 # Save the filled siteInfo dataset
-siteInfo_fill = siteInfo_fill.chunk({'x': 256, 'y': 256, 'year': -1, 'month': -1})
-
 siteInfo_fill.to_netcdf(
-    "data/data_assembled/siteinfo_cache2.nc", 
-    encoding={var: {'zlib': True, 'complevel': 5} for var in siteInfo_fill.data_vars}
+    "data/data_assembled/siteinfo_cache.nc",
+    encoding=encoding
 )
-
 

@@ -4,7 +4,10 @@
       "Bash(\"F:\\Users\\jinzhu\\Documents\\miniforge\\envs\\luto\\python.exe\" -c:*)",
       "Bash(dir /b /s \"n:\\Data-Master\\FullCAM\\FullCAM_REST_API_GET_DATA_2025\\*.py\")",
       "Bash(dir:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(\"F:\\Users\\jinzhu\\Documents\\miniforge\\envs\\luto\\python.exe\" RUN_FullCAM2024.py)"
     ],
     "deny": [],
     "ask": []

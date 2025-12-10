@@ -1,4 +1,5 @@
 import os
+import xarray as xr
 
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
@@ -27,24 +28,22 @@ existing_siteinfo, existing_species, existing_dfs = get_existing_downloads()
 to_request_coords = set(RES_factor_coords) - set(existing_dfs)
 
 
-
-
 ###########################################################
 #              Run FullCAM with REST API                  #
 ###########################################################
 url = f"{BASE_URL_SIM}{ENDPOINT}"
 headers = {"Ocp-Apim-Subscription-Key": API_KEY}
+siteInfo_fill = xr.open_dataset("data/data_assembled/siteinfo_cache.nc").compute()
+
 
 tasks = [
-    delayed(get_plot_simulation)(lon, lat, url, headers)
+    delayed(get_plot_simulation)('Cache', lon, lat, siteInfo_fill, url, headers)
     for lon, lat in tqdm(to_request_coords, total=len(to_request_coords))
 ]
 
-for _ in tqdm(Parallel(n_jobs=20, return_as='generator_unordered')(tasks), total=len(tasks)):
+
+for _ in tqdm(Parallel(n_jobs=20, return_as='generator_unordered', backend='threading')(tasks), total=len(tasks)):
     pass
 
 
 
-###########################################################
-#           Run FullCAM with local cache                  #
-###########################################################
