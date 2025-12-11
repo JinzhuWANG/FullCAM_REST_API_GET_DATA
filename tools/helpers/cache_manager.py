@@ -12,6 +12,7 @@ import re
 from typing import Tuple, List
 from scandir_rs import Scandir
 from tqdm.auto import tqdm
+from joblib import Parallel, delayed
 
 def load_cache(cache_file: str = 'downloaded/successful_downloads.txt') -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]], List[Tuple[float, float]]]:
     """
@@ -32,6 +33,7 @@ def load_cache(cache_file: str = 'downloaded/successful_downloads.txt') -> Tuple
         List of (lat, lon) tuples for existing simulation dataframe files
     """
     lon_lat_reg_xml = re.compile(r'.*_(-?\d+\.\d+)_(-?\d+\.\d+)\.xml')
+    lon_lat_reg_species = re.compile(r'species_(-?\d+\.\d+)_(-?\d+\.\d+)_specId_\d+\.xml')
     lon_lat_reg_csv = re.compile(r'df_(-?\d+\.\d+)_(-?\d+\.\d+)\.csv')
 
     existing_siteinfo = []
@@ -53,7 +55,7 @@ def load_cache(cache_file: str = 'downloaded/successful_downloads.txt') -> Tuple
                     lon, lat = match[0]
                     existing_siteinfo.append((float(lon), float(lat)))
             elif line.startswith('species_'):
-                match = lon_lat_reg_xml.findall(line)
+                match = lon_lat_reg_species.findall(line)
                 if match:
                     lon, lat = match[0]
                     existing_species.append((float(lon), float(lat)))
@@ -70,7 +72,7 @@ def load_cache(cache_file: str = 'downloaded/successful_downloads.txt') -> Tuple
 
 def rebuild_cache(
     downloaded_dir: str = 'downloaded',
-    cache_file: str = 'downloaded/successful_downloads.txt',
+    cache_file: str = 'downloaded/successful_downloads.txt'
 ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]], List[Tuple[float, float]]]:
     """
     Rebuild cache by scanning downloaded/ directory.
@@ -107,6 +109,7 @@ def rebuild_cache(
 
     files = [entry.path for entry in Scandir(downloaded_dir)]
     lon_lat_reg_xml = re.compile(r'.*_(-?\d+\.\d+)_(-?\d+\.\d+)\.xml')
+    lon_lat_reg_species = re.compile(r'species_(-?\d+\.\d+)_(-?\d+\.\d+)_specId_\d+\.xml')
     lon_lat_reg_csv = re.compile(r'df_(-?\d+\.\d+)_(-?\d+\.\d+)\.csv')
 
     siteinfo_files = []
@@ -118,8 +121,7 @@ def rebuild_cache(
     existing_dfs = []
 
     # Collect filenames and coordinates
-    iterator = tqdm(files, desc="Scanning files")
-    for filepath in iterator:
+    for filepath in tqdm(files, desc="Scanning files"):
         filename = os.path.basename(filepath)
 
         if filename.startswith('siteInfo_'):
@@ -129,7 +131,7 @@ def rebuild_cache(
                 siteinfo_files.append(filename)
                 existing_siteinfo.append((float(lat), float(lon)))
         elif filename.startswith('species_'):
-            match = lon_lat_reg_xml.match(filename)
+            match = lon_lat_reg_species.match(filename)
             if match:
                 lon, lat = match.groups()
                 species_files.append(filename)
@@ -161,15 +163,13 @@ def rebuild_cache(
 def get_existing_downloads(
     cache_file: str = 'downloaded/successful_downloads.txt',
     downloaded_dir: str = 'downloaded',
-    auto_rebuild: bool = True
 ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]], List[Tuple[float, float]]]:
     """
     Get existing downloads from cache, rebuilding if necessary.
 
     This is the main entry point for getting existing downloads.
     - If cache file exists: load from cache (fast)
-    - If cache file missing and auto_rebuild=True: rebuild from directory scan (slow)
-    - If cache file missing and auto_rebuild=False: return empty lists
+    - If cache file missing: rebuild from directory scan (slow)
 
     Parameters
     ----------
@@ -177,8 +177,6 @@ def get_existing_downloads(
         Path to cache file (default: 'downloaded/successful_downloads.txt')
     downloaded_dir : str, optional
         Directory containing downloaded XML files (default: 'downloaded')
-    auto_rebuild : bool, optional
-        Automatically rebuild cache if missing (default: True)
 
     Returns
     -------
@@ -194,41 +192,98 @@ def get_existing_downloads(
     if os.path.exists(cache_file):
         return load_cache(cache_file)
 
-    # Cache doesn't exist
+    # Cache doesn't exist - rebuild it
     print(f"Cache file not found: {cache_file}")
+    return rebuild_cache(downloaded_dir, cache_file)
 
-    if auto_rebuild:
-        # Check if downloaded directory has files
-        if os.path.exists(downloaded_dir):
-            file_count = len([f for f in os.listdir(downloaded_dir) if f.endswith('.xml') or f.endswith('.csv')])
 
-            if file_count > 0:
-                print(f"Found {file_count:,} files in {downloaded_dir}")
-                response = input("Rebuild cache from existing files? This may take a while. (y/n): ")
+def _remove_single_file(filepath: str) -> Tuple[str, bool, str]:
+    """
+    Remove a single file.
 
-                if response.lower() == 'y':
-                    return rebuild_cache(downloaded_dir, cache_file)
-                else:
-                    print("Skipping cache rebuild. Starting fresh.")
-                    # Create empty cache file
-                    with open(cache_file, 'w', encoding='utf-8') as f:
-                        pass
-                    return [], [], []
-            else:
-                print(f"No files found in {downloaded_dir}. Starting fresh.")
-                # Create empty cache file
-                with open(cache_file, 'w', encoding='utf-8') as f:
-                    pass
-                return [], [], []
-        else:
-            print(f"Directory {downloaded_dir} not found. Creating empty cache.")
-            os.makedirs(downloaded_dir, exist_ok=True)
-            with open(cache_file, 'w', encoding='utf-8') as f:
-                pass
-            return [], [], []
+    Parameters
+    ----------
+    filepath : str
+        Full path to the file to remove
+
+    Returns
+    -------
+    Tuple[str, bool, str]
+        (filepath, success, error_message)
+    """
+    try:
+        os.remove(filepath)
+        return (filepath, True, "")
+    except Exception as e:
+        return (filepath, False, str(e))
+
+
+def batch_remove_files(
+    pattern: str,
+    directory: str = 'downloaded',
+    n_jobs: int = 100,
+) -> Tuple[int, int, List[Tuple[str, str]]]:
+    """
+    Batch remove files containing a pattern string in their filename.
+
+    Uses joblib with threading backend for fast parallel deletion.
+
+    Parameters
+    ----------
+    pattern : str
+        String pattern to match in filenames. Any file whose name contains
+        this string will be removed.
+    directory : str, optional
+        Directory to search for files (default: 'downloaded')
+    n_jobs : int, optional
+        Number of parallel threads (default: 100)
+
+    Returns
+    -------
+    Tuple[int, int, List[Tuple[str, str]]]
+        (success_count, failure_count, list of (filepath, error) for failures)
+    """
+    if not os.path.exists(directory):
+        print(f"Error: Directory {directory} not found!")
+        return 0, 0, []
+
+    print(f"Scanning {directory} for files containing '{pattern}'...")
+
+    # Scan directory for matching files
+    matching_files = []
+    files = [entry.path for entry in Scandir(directory)]
+    for entry in files:
+        filename = os.path.basename(entry)
+        if pattern in filename:
+            matching_files.append(entry)
+
+    if not matching_files:
+        print(f"No files found containing '{pattern}'")
+        return 0, 0, []
+
+    print(f"Removing {len(matching_files):,} files using {n_jobs} threads...")
+
+    # Parallel deletion using threading backend
+    results = Parallel(n_jobs=n_jobs, backend='threading')(
+        delayed(_remove_single_file)(f'{directory}/{filepath}')
+        for filepath in tqdm(matching_files, desc="Removing files")
+    )
+
+    # Count successes and failures
+    success_count = sum(1 for _, success, _ in results if success)
+    failures = [(filepath, error) for filepath, success, error in results if not success]
+
+    print(f"\nRemoval complete:")
+    print(f"  - Successfully removed: {success_count:,} files")
+    print(f"  - Failed: {len(failures):,} files")
+
+    if failures:
+        print("\nFailed files:")
+        for filepath, error in failures[:10]:
+            print(f"  {os.path.basename(filepath)}: {error}")
+        if len(failures) > 10:
+            print(f"  ... and {len(failures) - 10:,} more failures")
     else:
-        print("Auto-rebuild disabled. Starting fresh.")
-        # Create empty cache file
-        with open(cache_file, 'w', encoding='utf-8') as f:
-            pass
-        return [], [], []
+        rebuild_cache()
+
+    return success_count, len(failures), failures

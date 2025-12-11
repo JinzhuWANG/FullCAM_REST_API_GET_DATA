@@ -5,8 +5,8 @@ from scandir_rs import Scandir
 from pathlib import Path
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
+from tools.helpers.cache_manager import get_existing_downloads
 
-from tools.cache_manager import get_existing_downloads
 
 
 

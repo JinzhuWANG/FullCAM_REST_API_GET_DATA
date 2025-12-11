@@ -198,6 +198,59 @@ if not API_KEY:
 - Never commit keys to git
 - Never print keys in logs
 
+## Comparing PLO Files
+
+When debugging carbon stock discrepancies, compare two PLO files by checking these key input values:
+
+### Key Input Parameters to Compare
+
+| Parameter | Location in PLO | Description |
+|-----------|-----------------|-------------|
+| `lonBL`, `latBL` | `<Build>` | Geographic coordinates - must match! |
+| `maxAbgMF` | `<Site>` attribute | Max aboveground mass for forest |
+| `fpiAvgLT` | `<Site>` attribute | Long-term average forest productivity index |
+| `clayFrac` | `<SoilOther>` | Soil clay fraction (affects decomposition) |
+| `rpmaCMInitF` | `<InitSoilF>` | Initial resistant plant material carbon |
+| `humsCMInitF` | `<InitSoilF>` | Initial humus carbon |
+| `inrtCMInitF` | `<InitSoilF>` | Initial inert carbon |
+| `TSMDInitF` | `<InitSoilF>` | Initial topsoil moisture deficit |
+
+### Time Series to Compare
+
+| Time Series | `tInTS` value | Expected Count |
+|-------------|---------------|----------------|
+| `avgAirTemp` | avgAirTemp | 648 (54 years × 12 months) |
+| `rainfall` | rainfall | 648 (54 years × 12 months) |
+| `openPanEvap` | openPanEvap | 648 (54 years × 12 months) |
+| `forestProdIx` | forestProdIx | 53 (annual values) |
+
+### Quick Comparison Checklist
+
+1. **Location match**: Both files have same `lonBL` and `latBL`
+2. **Time series count**: All climate series have 648 values (or same count)
+3. **Site attributes**: `maxAbgMF` and `fpiAvgLT` within 1-2%
+4. **Soil init values**: All `*CMInitF` values within 1%
+5. **Clay fraction**: `clayFrac` values within 1%
+
+### Common Issues
+
+| Issue | Symptom | Cause |
+|-------|---------|-------|
+| Wrong location | All values differ significantly | `lonBL`/`latBL` mismatch |
+| Missing year | Time series has 636 instead of 648 | Cache missing last year of data |
+| Different timesteps | `stepsPerYrYTZ` differs | Web UI uses 110, cache may use 1 |
+
+### Example: Ask Claude to Compare PLO Files
+
+```
+Compare the key input data in these two PLO files:
+- data/Web_ui_140.05_-25.49.plo (reference from web UI)
+- data/Web_ui_140.05_-25.49_cache.plo.xml (generated from cache)
+
+Check: avgAirTemp, rainfall, openPanEvap, forestProdIx, maxAbgMF, fpiAvgLT,
+       clayFrac, rpmaCMInitF, humsCMInitF, inrtCMInitF, TSMDInitF
+```
+
 ## Version Information
 
 - **FullCAM 2024:** PLO version `5009` (current default)

@@ -105,12 +105,19 @@ carbon_full.name = 'data'
 carbon_full = carbon_full.astype(np.float32)
 carbon_full.rio.write_crs("EPSG:4283", inplace=True)
 carbon_full.rio.write_transform(trans, inplace=True)
-carbon_full.to_netcdf('data/processed/carbonstock_RES.nc', encoding={'data': {'zlib': True, 'complevel': 5}})
+carbon_full.to_netcdf(
+    f'data/processed/carbonstock_RES_{RES_factor}.nc', 
+    encoding={'data': {'zlib': True, 'complevel': 5}}
+)
 
 # Save to GeoTIFFs
 for var in carbon_full['VARIABLE'].values:
     xarry = carbon_full.sel(VARIABLE=var, drop=True)
-    export_to_geotiff_with_band_names(xarry, f'data/processed/carbonstock_{var}_RES_multiband.tif', band_dim='YEAR')
+    export_to_geotiff_with_band_names(
+        xarry, 
+        f'data/processed/carbonstock_{var}_RES_{RES_factor}_multiband.tif',
+        band_dim='YEAR'
+    )
 
 
 

@@ -8,7 +8,9 @@ from glob import glob
 from tqdm.auto import tqdm
 from joblib import Parallel, delayed
 from rioxarray import merge as rio_merge
-from tools.cache_manager import get_existing_downloads
+
+from tools import get_downloading_coords
+from tools.helpers.cache_manager import get_existing_downloads
 
 
 # Config
@@ -17,15 +19,7 @@ RES_factor = 10
 # Get resfactored coords
 existing_siteinfo, existing_species, existing_dfs = get_existing_downloads()
 
-Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True) >= -1 # >=-1 means all Australia continent
-lon_lat = Aus_xr.to_dataframe(name='mask').reset_index()[['y', 'x', 'mask']].round({'x':2, 'y':2})
-lon_lat['cell_idx'] = range(len(lon_lat))
-
-Aus_cell = xr.DataArray(np.arange(Aus_xr.size).reshape(Aus_xr.shape), coords=Aus_xr.coords, dims=Aus_xr.dims)
-Aus_cell_RES = Aus_cell.coarsen(x=RES_factor, y=RES_factor, boundary='trim').max()
-Aus_cell_RES_df = Aus_cell_RES.to_dataframe(name='cell_idx').reset_index()['cell_idx']
-
-RES_df = lon_lat.query('mask == True').loc[lon_lat['cell_idx'].isin(Aus_cell_RES_df)].reset_index(drop=True)
+RES_df = get_downloading_coords(resfactor=10)
 RES_coords = RES_df.set_index(['x', 'y']).index.tolist()
 
 res_coords = set(existing_siteinfo).intersection(set(RES_coords))

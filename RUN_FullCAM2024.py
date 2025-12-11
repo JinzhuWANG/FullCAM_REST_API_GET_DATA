@@ -27,13 +27,13 @@ RES_factor_coords = scrap_coords.set_index(['x', 'y']).index.tolist()
 existing_siteinfo, existing_species, existing_dfs = get_existing_downloads()
 to_request_coords = set(RES_factor_coords) - set(existing_dfs)
 
-
 ###########################################################
 #              Run FullCAM with REST API                  #
 ###########################################################
+
 url = f"{BASE_URL_SIM}{ENDPOINT}"
 headers = {"Ocp-Apim-Subscription-Key": API_KEY}
-siteInfo_fill = xr.open_dataset("data/data_assembled/siteinfo_cache.nc").compute()
+siteInfo_fill = xr.load_dataset("data/data_assembled/siteinfo_cache.nc")
 
 
 tasks = [
@@ -42,7 +42,7 @@ tasks = [
 ]
 
 
-for _ in tqdm(Parallel(n_jobs=20, return_as='generator_unordered', backend='threading')(tasks), total=len(tasks)):
+for _ in tqdm(Parallel(n_jobs=512, return_as='generator_unordered', backend='threading')(tasks), total=len(tasks)):
     pass
 
 

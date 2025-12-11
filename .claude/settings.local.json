@@ -7,7 +7,14 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(\"F:\\Users\\jinzhu\\Documents\\miniforge\\envs\\luto\\python.exe\" RUN_FullCAM2024.py)"
+      "Bash(\"F:\\Users\\jinzhu\\Documents\\miniforge\\envs\\luto\\python.exe\" RUN_FullCAM2024.py)",
+      "Bash(\"F:\\Users\\jinzhu\\Documents\\miniforge\\envs\\luto\\python.exe\" n:Data-MasterFullCAMFullCAM_REST_API_GET_DATA_2025toolsGet_datacheck_val.py)",
+      "Bash(\"F:\\Users\\jinzhu\\Documents\\miniforge\\envs\\luto\\python.exe\" tools/Get_data/check_val.py)",
+      "Bash(\"F:\\Users\\jinzhu\\Documents\\miniforge\\envs\\luto\\python.exe\" \"n:\\Data-Master\\FullCAM\\FullCAM_REST_API_GET_DATA_2025\\tools\\Get_data\\check_val.py\")",
+      "Bash(findstr:*)",
+      "Bash(\"F:\\Users\\jinzhu\\Documents\\miniforge\\envs\\luto\\python.exe\":*)",
+      "Bash(powershell -Command \"vssadmin list shadows /for=N:\")",
+      "Bash(powershell:*)"
     ],
     "deny": [],
     "ask": []

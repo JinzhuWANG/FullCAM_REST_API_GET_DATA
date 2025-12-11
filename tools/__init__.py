@@ -187,14 +187,37 @@ def get_siteinfo(
 
 
 
-def get_species(lat, lon, try_number=10, download_records='downloaded/successful_downloads.txt'):
+
+def get_species(lon, lat, specId=8, try_number=10, download_records='downloaded/successful_downloads.txt'):
+    '''
+    Download species XML for given lat/lon.
+    To ensure data integrity, multiple attempts are made to download the species data.
+    Parameters
+    ----------
+    lon : float
+        Longitude of the site.
+    lat : float
+        Latitude of the site.
+    specId : int
+        Species ID to download (default: 8 for Eucalyptus globulus).
+    try_number : int
+        Maximum number of download attempts.
+    download_records : str
+        Path to the cache file for recording successful downloads.
+        
+    Returns
+    -------
+        None if successful, else (lon, lat), "Failed" on failure.
+    '''
+    
     url = f"{BASE_URL_DATA}/2024/data-builder/species"
+    
     PARAMS = {
         "latitude": lat,
         "longitude": lon,
         "area": "OneKm",
-        "frCat": "Plantation",
-        "specId": 8,  # Eucalyptus globulus, used as Carbon Plantations in LUTO
+        "frCat": None,      # Using None creates same results as the web UI default
+        "specId": specId,   # Eucalyptus globulus, used as Carbon Plantations in LUTO
         "version": 2024
     }
 
@@ -211,7 +234,7 @@ def get_species(lat, lon, try_number=10, download_records='downloaded/successful
                 continue
 
             # Success: save and return
-            filename = f'species_{lon}_{lat}.xml'
+            filename = f'species_{lon}_{lat}_specId_{specId}.xml'
             with open(f'downloaded/{filename}', 'wb') as f:
                 f.write(response.content)
 
@@ -225,7 +248,6 @@ def get_species(lat, lon, try_number=10, download_records='downloaded/successful
                 time.sleep(2**attempt)
 
     return f'{lon},{lat}', "Failed"
-
 
 
 def get_plot_simulation(
@@ -243,7 +265,7 @@ def get_plot_simulation(
     # Re-attempt assembly after redownloading
     for attempt in range(try_number):
         try:
-            plo_str = assemble_plo_sections(data_source, lon, lat, data_obj, 'Eucalyptus_globulus', 2010)
+            plo_str = assemble_plo_sections(data_source, lon, lat, data_obj)
                         
             response = requests.post(
                 url, 
@@ -516,7 +538,8 @@ def create_build_section(
     return (f'<Build lonBL="{lonBL}" latBL="{latBL}" frCat="{frCat}" '
             f'applyDownloadedData="{_bool_to_xml(applyDownloadedData)}" '
             f'areaBL="{areaBL}" frFracBL="{frFracBL}"/>')
-
+    
+    
 
 def create_site_section(
     data_source: str = "API",
@@ -549,7 +572,7 @@ def create_site_section(
             parsed_data = parse_site_data(f.read())
 
     elif data_source == "Cache":    # Cache Data Mode: Load from local cache (xarray dataset)
-        parsed_data = data_obj.sel(x=lon, y=lat, method='nearest', drop=True)
+        parsed_data = data_obj.sel(x=lon, y=lat, method='nearest', drop=True).compute()
     else:
         raise ValueError(f"data_source '{data_source}' not recognized. Use 'API' or 'Cache'.")
         
@@ -589,33 +612,37 @@ def create_site_section(
     return etree.tostring(holder_root).decode()
 
 
-def create_species_section(species) -> str:
+def create_species_section(lon:float, lat:float, specId:int=8) -> str:
     '''
     Create the Species section of the PLO file by reading species data
     
     Note: the species XML files are the same for the same species at different locations,
     so lon and lat are not needed as parameters here.
     
-    Currently only supports the below species per PLO file.
-    - Eucalyptus_globulus
-    - Mallee_eucalypt
-    - Environmental_plantings
+    Parameters:
+    -----------
+        lon (float): Longitude of the site.
+        lat (float): Latitude of the site.
+        specId (int): Species ID to load (default: 8 for Eucalyptus globulus).
+    
+    Returns:
+    --------
+        str: The Species section as an XML string.
     
     '''
-    if species not in ['Eucalyptus_globulus', 'Mallee_eucalypt', 'Environmental_plantings']:
-        raise ValueError(f"Species '{species}' not supported. Supported species: "
-                         f"'Eucalyptus_globulus', 'Mallee_eucalypt', 'Environmental_plantings'.")
+    if specId not in [8]:
+        raise ValueError(f"specId '{specId}' not supported. Supported species: "
+                         f"8 (Eucalyptus globulus).")
     
-    file_path = f'data/dataholder_species_{species}.xml'
+    file_path = f'downloaded/species_{lon}_{lat}_specId_{specId}.xml'
     if not os.path.exists(file_path):
-        raise FileNotFoundError(
-            f"Required file '{file_path}' not found!"
-        )
-        
+        get_species(lon, lat, specId)
+        print(f"Downloaded species data for specId {specId} at ({lon}, {lat}).")
+
     species_root = etree.parse(file_path).getroot().findall('SpeciesForest')
     if len(species_root) != 1:
         raise ValueError(f"Expected one SpeciesForest element in {file_path}, found {len(species_root)}")
-    species = etree.tostring(species_root[0], encoding='unicode', pretty_print=True).replace('\n', '')
+    species = etree.tostring(species_root[0]).decode()
     
     return (
         f'<SpeciesForestSet count="{len(species_root)}" showOnlyInUse="false">{species}</SpeciesForestSet>'
@@ -876,7 +903,7 @@ def assemble_plo_sections(
     lon:float=None, 
     lat:float=None, 
     data_obj:xr.Dataset=None,
-    species:str='Eucalyptus_globulus', 
+    specId:int=8, 
     year_start=2010, 
 ) -> str:
     """Assemble all sections of a PLO file for given lon/lat.
@@ -893,12 +920,8 @@ def assemble_plo_sections(
         Latitude of the plot.
     data_obj : xr.Dataset, optional
         Optional xarray Dataset for site data when using "Cache" mode.
-    species : str, optional
-        Species name for the simulation (default is 'Eucalyptus_globulus').
-        Currently supported species:
-         - 'Eucalyptus_globulus'
-         - 'Mallee_eucalypt'
-         - 'Environmental_plantings'
+    specId : int, optional
+        Species ID to load (default is 8 for Eucalyptus globulus).
     year_start : int, optional
         The starting year for the simulation (default is 2010).
     
@@ -924,7 +947,7 @@ def assemble_plo_sections(
                 f'{create_timing_section()}\n'
                 f'{create_build_section(lon, lat)}\n'
                 f'{create_site_section(data_source, lon, lat, data_obj)}\n'
-                f'{create_species_section(species)}\n'
+                f'{create_species_section(lon, lat, specId)}\n'
                 f'{create_soil_section(data_source, lon, lat, data_obj, year_start)}\n'
                 f'{create_init_section(data_source, lon, lat, data_obj, year_start)}\n'
                 f'{create_event_section()}\n'

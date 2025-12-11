@@ -1,7 +1,5 @@
-
 import requests
 import io
-import rioxarray as rxr
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -13,7 +11,6 @@ from tqdm.auto import tqdm
 from lxml import etree
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
-from pathlib import Path
 
 from tools import get_downloading_coords
 from tools.helpers.cache_manager import get_existing_downloads
@@ -134,12 +131,12 @@ The FullCAM model needs monthly data for:
 - rain, corresponding to FullCAM variable 'rainfall'
 - tavg, corresponding to FullCAM variable 'avgAirTemp'
 
-As of Dec 2025, the FullCAM model requires data from 1970 to 2022.
+As of Dec 2025, the FullCAM model requires data from 1970 to 2023.
 '''
 
 # Get variable and files
 files = sorted(pathlib.Path("data/ANUClim/raw_data/").glob("*.nc"))
-years_FullCAM = range(1970, 2023)
+years_FullCAM = range(1970, 2023 + 1)
 
 
 # ------ evap ------ 
@@ -209,14 +206,24 @@ combined_ds = xr.Dataset({
     'avgAirTemp': tavg_ds.sel(year=years_FullCAM)
 })
 
+
+# Build encoding with chunking: x,y = 256, other dims = full size
+encoding = {}
+for var in combined_ds.data_vars:
+    dims = combined_ds[var].dims
+    chunks = []
+    for dim in dims:
+        if dim in ('x', 'y'):
+            chunks.append(256)
+        else:
+            chunks.append(1)  # Single chunk for other dimensions
+    encoding[var] = {'zlib': True, 'complevel': 4, 'chunksizes': tuple(chunks)}
+    
+
 combined_ds.to_netcdf(
     "data/ANUClim/processed/ANUClim_to_FullCAM.nc", 
     mode='w',
-    encoding={
-        'openPanEvap': {'zlib': True, 'complevel': 5, 'chunksizes': (1, 1, 256, 256)},
-        'rainfall': {'zlib': True, 'complevel': 5, 'chunksizes': (1, 1, 256, 256)},
-        'avgAirTemp': {'zlib': True, 'complevel': 5, 'chunksizes': (1, 1, 256, 256)},
-    }
+    encoding=encoding
 )
 
 
