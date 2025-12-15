@@ -94,7 +94,8 @@ get_plot_simulation(lon, lat, url, headers)
     │   ├── get_ANUClim.py               # Download ANUClim climate data
     │   ├── get_FPI_lyrs.py              # Get FPI layers
     │   ├── get_SoilClay.py              # Get soil clay fraction
-    │   └── get_maxAbgMF.py              # Get max aboveground mass
+    │   ├── get_maxAbgMF.py              # Get max aboveground mass
+    │   └── get_TYR_R.py                 # Transform TYR R species data
     └── helpers/                         # Helper utilities
         ├── cache_manager.py             # Cache management
         ├── batch_manipulate_XML.py      # Batch XML processing

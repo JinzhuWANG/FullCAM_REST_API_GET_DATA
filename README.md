@@ -47,7 +47,8 @@ Python toolkit for interacting with Australia's **FullCAM (Full Carbon Accountin
     │   ├── get_ANUClim.py               # Download ANUClim climate data
     │   ├── get_FPI_lyrs.py              # Get Forest Productivity Index layers
     │   ├── get_SoilClay.py              # Get soil clay fraction data
-    │   └── get_maxAbgMF.py              # Get maximum aboveground mass fraction
+    │   ├── get_maxAbgMF.py              # Get maximum aboveground mass fraction
+    │   └── get_TYR_R.py                 # Transform TYR R data for species
     └── helpers/                         # Helper utilities
         ├── cache_manager.py             # Cache rebuild/verify/load
         ├── batch_manipulate_XML.py      # Batch XML processing
@@ -211,6 +212,7 @@ The toolkit can assemble data from multiple sources:
 | Forest Productivity Index | FPI raster layers | `tools/Get_data/get_FPI_lyrs.py` |
 | Soil clay fraction | Soil landscape data | `tools/Get_data/get_SoilClay.py` |
 | Maximum aboveground mass | FullCAM API | `tools/Get_data/get_maxAbgMF.py` |
+| Species TYR R coefficients | Species NetCDF data | `tools/Get_data/get_TYR_R.py` |
 
 ## Common Operations
 

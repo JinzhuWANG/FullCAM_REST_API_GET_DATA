@@ -24,11 +24,12 @@ ENDPOINT = "/2024/fullcam-simulator/run-plotsimulation"
 url = f"{BASE_URL_SIM}{ENDPOINT}"
 headers = {"Ocp-Apim-Subscription-Key": API_KEY}
 
-# Define species ID to download
+# Define download parameters
+RES_factor = 5
 SPECIES_ID = 8  # Eucalyptus globulus
 
 # Get resfactored coords for downloading
-scrap_coords = get_downloading_coords(resfactor=10)
+scrap_coords = get_downloading_coords(resfactor=RES_factor)
 RES_factor_coords = scrap_coords.set_index(['x', 'y']).index.tolist()
 
 # Load existing downloaded files from cache
