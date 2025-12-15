@@ -133,21 +133,21 @@ for var in species_full.data_vars:
 Carbon_coords = set(existing_dfs).intersection(set(RES_coords))
 
 template_lon, template_lat = next(iter(Carbon_coords))
-carbon_template = get_carbon_data(template_lon, template_lat, SPECIES_ID) * np.nan
+carbon_template = get_carbon_data(template_lon, template_lat, SPECIES_ID, SPECIES_CAT) * np.nan
 carbon_full = carbon_template.squeeze(['y', 'x'], drop=True).expand_dims(y=all_lats, x=all_lons) * np.nan
 
 
 # Parallel fetch data
 def fetch_carbon_with_coords(lon, lat):
     try:
-        data = get_carbon_data(lon, lat, SPECIES_ID)
+        data = get_carbon_data(lon, lat, SPECIES_ID, SPECIES_CAT)
         return (lon, lat, data)
     except Exception as e:
         print(f"Error fetching carbon data for ({lon}, {lat}): {e}")
         return (lon, lat, carbon_template)
     
 tasks = [delayed(fetch_carbon_with_coords)(lon, lat) for lon, lat in Carbon_coords]
-for lon, lat, data in tqdm(Parallel(n_jobs=16, return_as='generator_unordered')(tasks), total=len(tasks)):
+for lon, lat, data in tqdm(Parallel(n_jobs=32, return_as='generator_unordered')(tasks), total=len(tasks)):
     carbon_full.loc[dict(y=lat, x=lon)] = data.squeeze(['y', 'x'], drop=True)
 
 

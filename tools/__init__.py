@@ -419,13 +419,14 @@ def get_plot_simulation(
             )
 
             if response.status_code == 200:
+                f_name = f'df_{lon}_{lat}_specId_{specId}_specCat_{specCat}.csv'
                 response_df = pd.read_csv(StringIO(response.text))
-                response_df.to_csv(f'downloaded/df_{lon}_{lat}_specId_{specId}_specCat_{specCat}.csv', index=False)
+                response_df.to_csv(f'downloaded/{f_name}', index=False)
                 
                 # Add the record to cache file
                 with _cache_write_lock:
                     with open(download_records, 'a', encoding='utf-8') as cache:
-                        cache.write(f'df_{lon}_{lat}_specId_{specId}.csv\n')
+                        cache.write(f'{f_name}\n')
                 return 
             
             else:
@@ -945,7 +946,7 @@ def create_event_section(specId:int, specCat:str) -> str:
     if not os.path.exists(plnfEV):
         raise FileNotFoundError(
             f"Required file '{plnfEV}' not found! "
-            f"Ensure dataholder_specId_{specId}_tTYFCat_{specCat}.xml exists in the data/ directory."
+            f"Ensure dataholder_specId_{specId}_tTYFCat_{specCat}.xml exists in the `data` directory."
         )
 
     # Read and return the raw XML content

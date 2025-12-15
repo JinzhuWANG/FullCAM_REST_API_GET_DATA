@@ -50,7 +50,7 @@ to_request_coords = [
 
 # Get cached data
 siteInfo_fill = xr.load_dataset("data/data_assembled/siteinfo_cache.nc", chunks={})
-species_fill = xr.load_dataset("data/Species_TYF_R/specId_8_match_LUTO.nc", chunks={})
+species_fill = xr.load_dataset(f"data/Species_TYF_R/specId_{SPECIES_ID}_match_LUTO.nc", chunks={})
 
 
 # Prepare download tasks
@@ -59,7 +59,7 @@ tasks = [
     for lon, lat in to_request_coords
 ]
 
-for _ in tqdm(Parallel(n_jobs=64, return_as='generator_unordered', backend='threading')(tasks), total=len(tasks)):
+for _ in tqdm(Parallel(n_jobs=32, return_as='generator_unordered', backend='threading')(tasks), total=len(tasks)):
     pass
 
 

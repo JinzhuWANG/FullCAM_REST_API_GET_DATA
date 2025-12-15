@@ -250,53 +250,35 @@ def get_species_data(lon: float, lat: float, specId: int = 8) -> xr.DataArray:
 
 
 
-def get_carbon_data(lon:float, lat:float, specId) -> xr.DataArray:
+def get_carbon_data(lon:float, lat:float, specId:int, specCat:str) -> xr.DataArray:
     '''
     Get carbon stock data from CSV file and return as xarray DataArray.
     '''
 
     # Check if file exists
-    filepath = f'downloaded/df_{lon}_{lat}_specId_{specId}.csv'
+    filepath = f'downloaded/df_{lon}_{lat}_specId_{specId}_specCat_{specCat}.csv'
     if not os.path.exists(filepath):
         return None
 
-    df = (
-        pd.read_csv(filepath)
-        .query('Year >= 2010')
-        .drop(columns=['Step In Year', 'Dec. Year'])
-        .rename(columns={
-            'Year': 'YEAR',
-            'C mass of plants  (tC/ha)': 'TREE_C_HA',
-            'C mass of debris  (tC/ha)': 'DEBRIS_C_HA',
-            'C mass of soil  (tC/ha)': 'SOIL_C_HA',
-        })
-        .set_index('YEAR')
-        .stack()
-        .reset_index(name='value')
-        .rename(columns={'level_1': 'VARIABLE'})
-        .set_index(['YEAR', 'VARIABLE'])
-        .reindex(
-            pd.MultiIndex.from_product(
-                [np.arange(2010, 2101),
-                 ['DEBRIS_C_HA', 'SOIL_C_HA', 'TREE_C_HA']],
-                names=['YEAR', 'VARIABLE']
-            ), fill_value=np.nan
-        )
-        .sort_values(['YEAR', 'VARIABLE'])
-        .reset_index()
-    )
+    # Read and filter directly - stay in wide format
+    variables = ['DEBRIS_C_HA', 'SOIL_C_HA', 'TREE_C_HA']
+    years = np.arange(2010, 2101)
 
-    df_xr = (
-        xr.DataArray(
-        df['value'].values.astype(np.float32).reshape(
-            df['YEAR'].nunique(),
-            df['VARIABLE'].nunique()),
-        coords={
-            'YEAR': df['YEAR'].unique(),
-            'VARIABLE': df['VARIABLE'].unique(),
-        },
-        dims=['YEAR', 'VARIABLE']
-        ).expand_dims(y=[lat], x=[lon])
+    df = pd.read_csv(
+        filepath,
+        usecols=['Year', 'C mass of plants  (tC/ha)', 'C mass of debris  (tC/ha)', 'C mass of soil  (tC/ha)']
+    )
+    df = df[df['Year'] >= 2010].rename(columns={
+        'Year': 'YEAR',
+        'C mass of plants  (tC/ha)': 'TREE_C_HA',
+        'C mass of debris  (tC/ha)': 'DEBRIS_C_HA',
+        'C mass of soil  (tC/ha)': 'SOIL_C_HA',
+    }).set_index('YEAR').reindex(years)[variables]
+
+    df_xr = xr.DataArray(
+        df.values.astype(np.float32)[np.newaxis, np.newaxis, :, :],
+        coords={'y': [lat], 'x': [lon], 'YEAR': years, 'VARIABLE': variables},
+        dims=['y', 'x', 'YEAR', 'VARIABLE']
     )
 
     return df_xr
