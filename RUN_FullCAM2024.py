@@ -1,13 +1,11 @@
 import os
-import numpy as np
 import xarray as xr
 
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
-from itertools import product
 
 from tools.helpers.cache_manager import get_existing_downloads
-from tools import get_downloading_coords, get_plot_simulation, get_species
+from tools import get_downloading_coords, get_plot_simulation
 
 
 
@@ -26,14 +24,15 @@ headers = {"Ocp-Apim-Subscription-Key": API_KEY}
 
 # Define download parameters
 RES_factor = 3
-SPECIES_ID = 8  # Eucalyptus globulus
+SPECIES_ID = 8          # Refer to `get_plot_simulation` docstring for species ID mapping
+SPECIES_CAT = 'Belt'    # Refer individual species in the web API to see specific category; such as 'Block' or 'Belt'
 
 # Get resfactored coords for downloading
 scrap_coords = get_downloading_coords(resfactor=RES_factor, include_region='LUTO')
 RES_factor_coords = scrap_coords.set_index(['x', 'y']).index.tolist()
 
 # Load existing downloaded files from cache
-existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(SPECIES_ID)
+existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(SPECIES_ID, SPECIES_CAT)
 existing_dfs_set = set((x, y) for x, y in existing_dfs)
 
 # Filter coords while preserving row order from scrap_coords
@@ -56,7 +55,7 @@ species_fill = xr.load_dataset("data/Species_TYF_R/specId_8_match_LUTO.nc", chun
 
 # Prepare download tasks
 tasks = [
-    delayed(get_plot_simulation)('Cache', lon, lat, siteInfo_fill, species_fill, SPECIES_ID, 'Block', url, headers)
+    delayed(get_plot_simulation)('Cache', lon, lat, siteInfo_fill, species_fill, SPECIES_ID, SPECIES_CAT, url, headers)
     for lon, lat in to_request_coords
 ]
 

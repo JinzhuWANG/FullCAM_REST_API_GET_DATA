@@ -44,7 +44,7 @@ Python toolkit for interacting with Australia's **FullCAM (Full Carbon Accountin
 ├── downloaded/                          # API cache (excluded from git)
 │   ├── siteInfo_{lon}_{lat}.xml         # Climate/soil/FPI data per location
 │   ├── species_{lon}_{lat}_specId_{id}.xml  # Species parameters per location
-│   ├── df_{lon}_{lat}_specId_{id}.csv   # Simulation results per location
+│   ├── df_{lon}_{lat}_specId_{id}_specCat_{cat}.csv  # Simulation results per location
 │   └── successful_downloads.txt         # Cache index (fast startup)
 └── tools/                               # Libraries and utilities
     ├── __init__.py                      # Core PLO functions + API utilities (1100+ lines)
@@ -180,7 +180,7 @@ data_species = xr.open_dataset("data/Species_TYF_R/specId_8_match_LUTO.nc")
 
 # Get coordinates to process
 coords = get_downloading_coords(resfactor=3)  # 3x downsampled grid
-existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(specId=8)
+existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(specId=8, specCat='Block')
 
 # Filter to coordinates not yet processed
 to_request = set(coords.set_index(['x', 'y']).index) - set(existing_dfs)
@@ -244,11 +244,11 @@ The cache provides:
 **Cache Management:**
 ```bash
 # Rebuild cache from existing files (if corrupted)
-python -c "from tools.helpers.cache_manager import rebuild_cache; rebuild_cache()"
+python -c "from tools.helpers.cache_manager import rebuild_cache; rebuild_cache(specId=8, specCat='Block')"
 
 # Load cache programmatically
 from tools.helpers.cache_manager import get_existing_downloads
-existing_siteinfo, existing_species, existing_dfs = get_existing_downloads()
+existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(specId=8, specCat='Block')
 ```
 
 ## Data Sources
@@ -284,8 +284,8 @@ TYF (Tree Yield Formula) parameters control species growth calibration:
 | Generate PLO file | `assemble_plo_sections('Cache', lon, lat, data_site, data_species, specId, specCat)` |
 | Run simulation | `get_plot_simulation('Cache', lon, lat, data_site, data_species, specId, specCat, url, headers)` |
 | Convert to NetCDF | `python FullCAM2NC.py` |
-| Load cache | `get_existing_downloads(specId=8)` |
-| Rebuild cache | `rebuild_cache(specId=8)` |
+| Load cache | `get_existing_downloads(specId=8, specCat='Block')` |
+| Rebuild cache | `rebuild_cache(specId=8, specCat='Block')` |
 | Get coordinates | `get_downloading_coords(resfactor=3)` |
 | Assemble data | `python tools/Get_data/assemble_data.py` |
 

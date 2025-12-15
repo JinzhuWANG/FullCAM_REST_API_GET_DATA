@@ -15,10 +15,11 @@ from tools.helpers.cache_manager import get_existing_downloads
 
 # Config
 RES_factor = 10
-SPECIES_ID = 8  # Eucalyptus globulus
+SPECIES_ID = 8          # Eucalyptus globulus
+SPECIES_CAT = 'Block'   # Block or Belt; need to confirm with individual species
 
 # Get resfactored coords
-existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(SPECIES_ID)
+existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(SPECIES_ID, SPECIES_CAT)
 
 RES_df = get_downloading_coords(resfactor=10)
 RES_coords = RES_df.set_index(['x', 'y']).index.tolist()

@@ -234,9 +234,10 @@ combined_ds.to_netcdf(
 ######################################################################################
 
 # Get resfactored coords for downloading
-SPECIES_ID = 8  # Eucalyptus globulus
+SPECIES_ID = 8          # Eucalyptus globulus
+SPECIES_CAT = 'Block'   # Block or Belt; need to confirm with individual species
 scrap_coords = get_downloading_coords(resfactor=10).set_index(['x', 'y']).index.tolist()
-existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(SPECIES_ID)
+existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(SPECIES_ID, SPECIES_CAT)
 
 res_coords = set(existing_siteinfo).intersection(set(scrap_coords))
 res_coords_x = xr.DataArray([coord[0] for coord in res_coords], dims=['cell'])

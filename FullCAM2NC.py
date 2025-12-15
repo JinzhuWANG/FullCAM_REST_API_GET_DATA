@@ -19,9 +19,10 @@ from tools.XML2Data import (
 
 
 # Get variables
-RES_factor = 10
-SPECIES_ID = 8  # Eucalyptus globulus
-existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(SPECIES_ID)
+RES_factor = 3
+SPECIES_ID = 8          # Eucalyptus globulus
+SPECIES_CAT = 'Block'   # Block or Belt; need to confirm with individual species
+existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(SPECIES_ID, SPECIES_CAT)
 
 
 # Get the RES coords
@@ -132,14 +133,14 @@ for var in species_full.data_vars:
 Carbon_coords = set(existing_dfs).intersection(set(RES_coords))
 
 template_lon, template_lat = next(iter(Carbon_coords))
-carbon_template = get_carbon_data(template_lon, template_lat) * np.nan
+carbon_template = get_carbon_data(template_lon, template_lat, SPECIES_ID) * np.nan
 carbon_full = carbon_template.squeeze(['y', 'x'], drop=True).expand_dims(y=all_lats, x=all_lons) * np.nan
 
 
 # Parallel fetch data
 def fetch_carbon_with_coords(lon, lat):
     try:
-        data = get_carbon_data(lon, lat)
+        data = get_carbon_data(lon, lat, SPECIES_ID)
         return (lon, lat, data)
     except Exception as e:
         print(f"Error fetching carbon data for ({lon}, {lat}): {e}")

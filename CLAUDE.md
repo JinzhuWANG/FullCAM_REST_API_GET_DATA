@@ -109,7 +109,7 @@ get_plot_simulation('Cache', lon, lat, data_site, data_species, specId=8, specCa
 ├── downloaded/                          # API cache (excluded from git)
 │   ├── siteInfo_{lon}_{lat}.xml         # Climate/soil/FPI data
 │   ├── species_{lon}_{lat}_specId_{id}.xml  # Species parameters
-│   ├── df_{lon}_{lat}_specId_{id}.csv   # Simulation results
+│   ├── df_{lon}_{lat}_specId_{id}_specCat_{cat}.csv  # Simulation results
 │   └── successful_downloads.txt         # Cache index
 └── tools/                               # Libraries and utilities
     ├── __init__.py                      # Core PLO functions + API utilities (1100+ lines)
@@ -138,8 +138,8 @@ get_plot_simulation('Cache', lon, lat, data_site, data_species, specId=8, specCa
 | Generate PLO file | `assemble_plo_sections('Cache', lon, lat, data_site, data_species, specId, specCat)` |
 | Run simulation | `get_plot_simulation('Cache', lon, lat, data_site, data_species, specId, specCat, url, headers)` |
 | Convert to NetCDF | `python FullCAM2NC.py` |
-| Load cache | `get_existing_downloads(specId=8)` |
-| Rebuild cache | `rebuild_cache(specId=8)` |
+| Load cache | `get_existing_downloads(specId=8, specCat='Block')` |
+| Rebuild cache | `rebuild_cache(specId=8, specCat='Block')` |
 | Get coordinates | `get_downloading_coords(resfactor=3)` |
 | Assemble data | `python tools/Get_data/assemble_data.py` |
 | Transform species | `python tools/Get_data/get_TYR_R.py` |
@@ -179,9 +179,9 @@ get_plot_simulation('Cache', lon, lat, data_site, data_species, specId=8, specCa
 
 ## Key Functions in tools/helpers/cache_manager.py
 
-- `load_cache(specId, cache_file)` - Load existing downloads from cache file
-- `rebuild_cache(specId, downloaded_dir, cache_file)` - Rebuild cache from directory scan
-- `get_existing_downloads(specId, cache_file, downloaded_dir)` - Main entry point for cache access
+- `load_cache(specId, specCat, cache_file)` - Load existing downloads from cache file
+- `rebuild_cache(specId, specCat, downloaded_dir, cache_file)` - Rebuild cache from directory scan
+- `get_existing_downloads(specId, specCat, cache_file, downloaded_dir)` - Main entry point for cache access
 - `batch_remove_files(pattern, directory, n_jobs)` - Batch delete files by pattern
 
 ## Key Functions in tools/Get_data/

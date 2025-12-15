@@ -250,13 +250,13 @@ def get_species_data(lon: float, lat: float, specId: int = 8) -> xr.DataArray:
 
 
 
-def get_carbon_data(lon:float, lat:float) -> xr.DataArray:
+def get_carbon_data(lon:float, lat:float, specId) -> xr.DataArray:
     '''
     Get carbon stock data from CSV file and return as xarray DataArray.
     '''
 
     # Check if file exists
-    filepath = f'downloaded/df_{lon}_{lat}.csv'
+    filepath = f'downloaded/df_{lon}_{lat}_specId_{specId}.csv'
     if not os.path.exists(filepath):
         return None
 

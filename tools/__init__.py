@@ -420,7 +420,7 @@ def get_plot_simulation(
 
             if response.status_code == 200:
                 response_df = pd.read_csv(StringIO(response.text))
-                response_df.to_csv(f'downloaded/df_{lon}_{lat}_specId_{specId}.csv', index=False)
+                response_df.to_csv(f'downloaded/df_{lon}_{lat}_specId_{specId}_specCat_{specCat}.csv', index=False)
                 
                 # Add the record to cache file
                 with _cache_write_lock:
