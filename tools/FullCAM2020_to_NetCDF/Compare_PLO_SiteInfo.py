@@ -13,8 +13,9 @@ from tools.helpers.cache_manager import get_existing_downloads
 
 # Resolution factor for downsampling (10 = 0.1° grid spacing)
 RES_factor = 10
+SPECIES_ID = 8  # Eucalyptus globulus
 PLO_data_path = Path('N:/Data-Master/FullCAM/FullCAM_REST_API_GET_DATA_2025/data/processed/BB_PLO_OneKm')
-existing_siteinfo, existing_species, existing_dfs = get_existing_downloads()
+existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(SPECIES_ID)
 
 # Get resfactored coords for downloading
 scrap_coords = get_downloading_coords(resfactor=RES_factor).set_index(['x', 'y']).index.tolist()

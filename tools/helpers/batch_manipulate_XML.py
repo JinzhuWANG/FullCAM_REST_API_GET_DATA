@@ -49,7 +49,8 @@ for result in tqdm(Parallel(n_jobs=-1, backend='threading', return_as='generator
     
     
 # ------------------- Delete files --------------------------
-existing_siteinfo, existing_species, existing_dfs = get_existing_downloads()
+SPECIES_ID = 8  # Eucalyptus globulus
+existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(SPECIES_ID)
 
 files_siteinfo = [f'downloaded/siteInfo_{lon}_{lat}.xml' for lon,lat in existing_siteinfo] 
 files_species = [f'downloaded/species_{lon}_{lat}.xml' for lon,lat in existing_species] 

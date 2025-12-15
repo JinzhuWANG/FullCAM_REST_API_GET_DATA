@@ -181,7 +181,7 @@ def parse_init_data(xml_string: str, tsmd_year: int) -> xr.DataArray:
     
 
 
-def get_siteinfo_data(lon:float, lat:float, tsmd_year:int) -> xr.Dataset:
+def get_siteinfo_data(lon:float, lat:float, tsmd_year:int=2010) -> xr.Dataset:
     """
     Load and parse siteInfo XML file for given coordinates.
 
@@ -215,6 +215,38 @@ def get_siteinfo_data(lon:float, lat:float, tsmd_year:int) -> xr.Dataset:
     return xr.merge([site_arr, soil_arr, init_arr]).expand_dims(y=[lat], x=[lon])
 
 
+
+def parse_species_data(xml_string: str):
+    '''Parse TYF r values from species XML string.
+    
+     Returns:
+        tyf_r_block (float): TYF r value for Block category.
+        tyf_r_belt (float): TYF r value for Belt category.
+    '''
+    root = etree.fromstring(xml_string)
+    plnf_event = root.xpath('//TYFCategory')
+    
+    data = {el.get('tTYFCat'):{'tyf_G':float(el.get('tyf_G')), 'tyf_r':float(el.get('tyf_r'))} for el in plnf_event}
+    data = pd.DataFrame.from_dict(data)
+    data.index.name = 'TYF_Type'
+
+    return xr.Dataset.from_dataframe(data).astype(np.float32)
+
+
+def get_species_data(lon: float, lat: float, specId: int = 8) -> xr.DataArray:
+    '''Fetch species data and parse TYF r values.
+    Args:
+        lon (float): Longitude of the location.
+        lat (float): Latitude of the location.
+    Returns:
+        xr.DataArray: DataArray containing TYF r values for Block and Belt categories.
+    '''
+    with open(f'downloaded/species_{lon}_{lat}_specId_{specId}.xml') as f:
+        xml_string = f.read()
+        
+    data_array = parse_species_data(xml_string).expand_dims(y=[lat], x=[lon])
+    
+    return data_array
 
 
 

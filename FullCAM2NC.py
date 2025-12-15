@@ -11,7 +11,8 @@ from tools.helpers.cache_manager import get_existing_downloads
 from tools.XML2Data import (
     export_to_geotiff_with_band_names, 
     get_carbon_data, 
-    get_siteinfo_data, 
+    get_siteinfo_data,
+    get_species_data, 
 )
 
 
@@ -19,11 +20,14 @@ from tools.XML2Data import (
 
 # Get variables
 RES_factor = 10
-existing_siteinfo, existing_species, existing_dfs = get_existing_downloads()
+SPECIES_ID = 8  # Eucalyptus globulus
+existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(SPECIES_ID)
+
 
 # Get the RES coords
 RES_df = get_downloading_coords(resfactor=RES_factor)
 RES_coords = RES_df.set_index(['x', 'y']).index.tolist()
+
 
 # Get the transform
 all_lats = np.arange(max(RES_df['y']), min(RES_df['y']) - 0.001, -RES_factor * 0.01).astype(np.float32)
@@ -76,6 +80,52 @@ for var, xarry in siteInfo_full.data_vars.items():
         xarry = xarry.stack(band=to_stack_dims).astype(np.float32)
     export_to_geotiff_with_band_names(xarry, f'data/processed/siteInfo_{var}_RES_multiband.tif')
     
+
+
+
+# ---------------------- Get species data ------------------------
+species_coords = set(existing_species).intersection(set(RES_coords))
+
+sample_lon, sample_lat  = next(iter(species_coords))
+species_template = get_species_data(sample_lon, sample_lat)  # Warm up cache
+species_full = species_template.squeeze(['y', 'x'], drop=True).expand_dims(y=all_lats, x=all_lons) * np.nan
+
+
+# Parallel fetch data
+def fetch_species_with_coords(lon, lat):
+    try:
+        data = get_species_data(lon, lat)
+        return (lon, lat, data)
+    except Exception as e:
+        print(f"Error fetching species data for ({lon}, {lat}): {e}")
+        return (lon, lat, species_template)
+    
+tasks = [delayed(fetch_species_with_coords)(lon, lat) for lon, lat in species_coords]
+for lon, lat, data in tqdm(Parallel(n_jobs=16, return_as='generator_unordered')(tasks), total=len(tasks)):
+    species_full.loc[dict(y=lat, x=lon)] = data.squeeze(['y', 'x'], drop=True)
+    
+    
+# Save to NetCDF
+species_full.rio.write_crs("EPSG:4283", inplace=True)
+species_full.rio.write_transform(trans, inplace=True)
+species_full.to_netcdf(
+    'data/processed/species_RES.nc', 
+    encoding={var: {'zlib': True, 'complevel': 5} for var in species_full.data_vars}
+)
+
+
+# Save to GeoTIFFs
+for var in species_full.data_vars:
+    xarry = species_full[var]
+    for TYF_Type in xarry['TYF_Type'].values:
+        export_to_geotiff_with_band_names(
+            xarry.sel(TYF_Type=TYF_Type, drop=True), 
+            f'data/processed/species_{var}_{TYF_Type}_RES_{RES_factor}_multiband.tif',
+            band_dim='YEAR'
+        )
+
+
+
 
 
 # ---------------------- Get CarbonStock data ------------------------

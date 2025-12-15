@@ -12,11 +12,12 @@ from tools.cache_manager import get_existing_downloads
 
 # Config
 RES_factor = 10
+SPECIES_ID = 8  # Eucalyptus globulus
 soil_path = Path('data/Soil_landscape_AUS/ClayContent/000055684v002/data')
 
 # --------------- Get valid coords ---------------
 PLO_data_path = Path('N:/Data-Master/FullCAM/FullCAM_REST_API_GET_DATA_2025/data/processed/BB_PLO_OneKm')
-existing_siteinfo, existing_species, existing_dfs = get_existing_downloads()
+existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(SPECIES_ID)
 
 Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True) >= -1 # >=-1 means all Australia continent
 lon_lat = Aus_xr.to_dataframe(name='mask').reset_index()[['y', 'x', 'mask']].round({'x':2, 'y':2})

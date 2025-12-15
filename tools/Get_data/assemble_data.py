@@ -135,4 +135,3 @@ siteInfo_fill.to_netcdf(
     "data/data_assembled/siteinfo_cache.nc",
     encoding=encoding
 )
-

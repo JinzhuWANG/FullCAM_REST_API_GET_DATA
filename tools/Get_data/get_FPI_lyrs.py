@@ -15,9 +15,10 @@ from tools.helpers.cache_manager import get_existing_downloads
 
 # Config
 RES_factor = 10
+SPECIES_ID = 8  # Eucalyptus globulus
 
 # Get resfactored coords
-existing_siteinfo, existing_species, existing_dfs = get_existing_downloads()
+existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(SPECIES_ID)
 
 RES_df = get_downloading_coords(resfactor=10)
 RES_coords = RES_df.set_index(['x', 'y']).index.tolist()

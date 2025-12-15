@@ -16,7 +16,7 @@ from lxml import etree
 from io import StringIO
 from threading import Lock
 from collections import Counter
-from tools.XML2Data import parse_site_data, parse_init_data, parse_soil_data
+from tools.XML2Data import parse_site_data, parse_init_data, parse_soil_data, parse_species_data
 
 
 # Configuration
@@ -74,7 +74,7 @@ def get_siteinfo(
     sim_start_year:int=2010,
     try_number=10, 
     download_records='downloaded/successful_downloads.txt', 
-    consensus_count=3
+    consensus_count=5
 ):
     '''
     Download siteinfo XML for given lat/lon with consensus mechanism.
@@ -188,10 +188,21 @@ def get_siteinfo(
 
 
 
-def get_species(lon, lat, specId=8, try_number=10, download_records='downloaded/successful_downloads.txt'):
+def get_species(
+    lon,
+    lat,
+    specId=8,
+    try_number=10,
+    download_records='downloaded/successful_downloads.txt',
+    consensus_count=5
+):
     '''
-    Download species XML for given lat/lon.
+    Download species XML for given lat/lon with consensus mechanism.
     To ensure data integrity, multiple attempts are made to download the species data.
+    A consensus is reached when the same tyf_r value is obtained a specified number of
+    times (consensus_count). This helps mitigate transient network issues or server
+    inconsistencies.
+
     Parameters
     ----------
     lon : float
@@ -204,28 +215,33 @@ def get_species(lon, lat, specId=8, try_number=10, download_records='downloaded/
         Maximum number of download attempts.
     download_records : str
         Path to the cache file for recording successful downloads.
-        
+    consensus_count : int
+        Number of matching downloads required for consensus.
+
     Returns
     -------
         None if successful, else (lon, lat), "Failed" on failure.
     '''
-    
+
     url = f"{BASE_URL_DATA}/2024/data-builder/species"
-    
+
     PARAMS = {
         "latitude": lat,
         "longitude": lon,
         "area": "OneKm",
-        "frCat": None,      # Using None creates same results as the web UI default
-        "specId": specId,   # Eucalyptus globulus, used as Carbon Plantations in LUTO
+        "frCat": None,         
+        "specId": specId,       # Eucalyptus globulus, used as Carbon Plantations in LUTO
         "version": 2024
     }
+
+    tyf_r_map = {}              # Maps tyf_r value to response text
+    tyf_r_counter = Counter()   # Count occurrences of each tyf_r value
 
     for attempt in range(try_number):
         is_last_attempt = (attempt == try_number - 1)
 
         try:
-            response = requests.get(url, params=PARAMS, headers=HEADERS, timeout=100)
+            response = requests.get(url, params=PARAMS, headers=HEADERS, timeout=60)
 
             # Non-200 status: apply exponential backoff and retry
             if response.status_code != 200:
@@ -233,17 +249,45 @@ def get_species(lon, lat, specId=8, try_number=10, download_records='downloaded/
                     time.sleep(2**attempt)
                 continue
 
-            # Success: save and return
+            # Track tyf_r occurrences for consensus
+            #   tyf_r is a representative value from TYFCategory element
+            species_tree = etree.fromstring(response.content)
+            
+            n_plnf = species_tree.xpath('//Event[@tEV="PlnF"]')
+            n_tyf_r = len(species_tree.xpath('.//TYFCategory'))
+            if n_plnf != n_tyf_r:
+                if not is_last_attempt:
+                    time.sleep(2**attempt)
+                continue
+            
+            tyf_category = species_tree.xpath('.//TYFCategory')[0]
+            tyf_r = tyf_category.get('tyf_r')
+
+            tyf_r_counter[tyf_r] += 1
+            tyf_r_map[tyf_r] = response.content
+            most_common_tyf_r, count = tyf_r_counter.most_common(1)[0]
+
+            # Check if consensus reached
+            if count < consensus_count:
+                if not is_last_attempt:
+                    time.sleep(0.5)
+                continue
+
+            # Consensus reached: save response and return
+            print(f"Consensus reached for species at ({lon}, {lat}) after {attempt + 1} attempts.")
             filename = f'species_{lon}_{lat}_specId_{specId}.xml'
+            consensus_response = tyf_r_map[most_common_tyf_r]
+
             with open(f'downloaded/{filename}', 'wb') as f:
-                f.write(response.content)
+                f.write(consensus_response)
 
             with _cache_write_lock:
                 with open(download_records, 'a', encoding='utf-8') as cache:
                     cache.write(f'{filename}\n')
-            return
+            
+            return  
 
-        except requests.RequestException:
+        except:
             if not is_last_attempt:
                 time.sleep(2**attempt)
 
@@ -254,18 +298,100 @@ def get_plot_simulation(
     data_source:str, 
     lon:float, 
     lat:float, 
-    data_obj:xr.Dataset, 
+    data_site:xr.Dataset, 
+    data_species:xr.Dataset,
+    specId:int,
+    specCat:str,
     url:str,
     headers:dict,  
     try_number:int=5, 
     timeout:int=60, 
     download_records:str='downloaded/successful_downloads.txt'
 ):
+    '''
+    Run FullCAM plot simulation via REST API for given lon/lat and species ID.
+    
+    Parameters
+    ----------
+    data_source : str
+        Source of site data: "API" or "Cache".
+    lon : float
+        Longitude of the site.
+    lat : float
+        Latitude of the site.
+    data_site : xr.Dataset
+        Optional xarray Dataset for site data when using "Cache" mode.
+    specId : int
+        Species ID to load (default is 8 for Eucalyptus globulus).
+    specCat : str
+        Planting event type. Such as 'Block' or 'Belt' planting.
+    url : str
+        FullCAM REST API simulation endpoint URL.
+    headers : dict
+        HTTP headers for the API request.
+    try_number : int
+        Maximum number of download attempts.
+    timeout : int
+        Request timeout in seconds.
+    download_records : str
+        Path to the cache file for recording successful downloads.
+        
+    Returns
+    -------
+        None if successful, else (lon, lat), "Failed" on failure.
+        
+        
+    The valid species IDs are:
+        ====  ================================================
+        ID    Species Name
+        ====  ================================================
+        0     Acacia Forest and Woodlands
+        1     Acacia mangium
+        2     Acacia Open Woodland
+        3     Acacia Shrubland
+        4     Callitris Forest and Woodlands
+        5     Casuarina Forest and Woodland
+        6     Chenopod Shrub; Samphire Shrub and Forbland
+        7     Environmental plantings
+        8     Eucalyptus globulus (default)
+        9     Eucalyptus grandis
+        10    Eucalyptus Low Open Forest
+        11    Eucalyptus nitens
+        12    Eucalyptus Open Forest
+        13    Eucalyptus Open Woodland
+        14    Eucalyptus Tall Open Forest
+        15    Eucalyptus urophylla or pellita
+        16    Eucalyptus Woodland
+        17    Heath
+        22    Low Closed Forest and Closed Shrublands
+        23    Mallee eucalypt species
+        24    Mallee Woodland and Shrubland
+        25    Mangrove
+        27    Melaleuca Forest and Woodland
+        31    Native species and revegetation <500mm rainfall
+        32    Native species and revegetation >=500mm rainfall
+        33    Native Species Regeneration <500mm rainfall
+        34    Native Species Regeneration >=500mm rainfall
+        38    Other acacia
+        39    Other eucalypts
+        40    Other Forests and Woodlands
+        41    Other non-eucalypts hardwoods
+        42    Other Shrublands
+        43    Other softwoods
+        45    Pinus hybrids
+        46    Pinus pinaster
+        47    Pinus radiata
+        48    Rainforest and vine thickets
+        49    Tropical Eucalyptus woodlands/grasslands
+        51    Unclassified Native vegetation
+        ====  ================================================
+    '''
+    
 
     # Re-attempt assembly after redownloading
     for attempt in range(try_number):
         try:
-            plo_str = assemble_plo_sections(data_source, lon, lat, data_obj)
+            plo_str = assemble_plo_sections(data_source, lon, lat, data_site, data_species, specId, specCat)
                         
             response = requests.post(
                 url, 
@@ -276,12 +402,12 @@ def get_plot_simulation(
 
             if response.status_code == 200:
                 response_df = pd.read_csv(StringIO(response.text))
-                response_df.to_csv(f'downloaded/df_{lon}_{lat}.csv', index=False)
+                response_df.to_csv(f'downloaded/df_{lon}_{lat}_specId_{specId}.csv', index=False)
                 
                 # Add the record to cache file
                 with _cache_write_lock:
                     with open(download_records, 'a', encoding='utf-8') as cache:
-                        cache.write(f'df_{lon}_{lat}.csv\n')
+                        cache.write(f'df_{lon}_{lat}_specId_{specId}.csv\n')
                 return 
             
             else:
@@ -545,7 +671,7 @@ def create_site_section(
     data_source: str = "API",
     lon: float = None,
     lat: float = None,
-    data_obj: xr.DataArray = None
+    data_site: xr.DataArray = None
 ) -> str:
     """
     Create Site section for PLO file with site parameters and time series.
@@ -557,7 +683,7 @@ def create_site_section(
         - "Cache": Load site data from local cache files in 'downloaded/' directory.
     lon (float): Longitude of the site.
     lat (float): Latitude of the site.
-    data_obj (xr.DataArray): Optional xarray DataArray for site data when using "Cache" mode.
+    data_site (xr.DataArray): Optional xarray DataArray for site data when using "Cache" mode.
     
     Returns
     -------
@@ -572,7 +698,7 @@ def create_site_section(
             parsed_data = parse_site_data(f.read())
 
     elif data_source == "Cache":    # Cache Data Mode: Load from local cache (xarray dataset)
-        parsed_data = data_obj.sel(x=lon, y=lat, method='nearest', drop=True).compute()
+        parsed_data = data_site.sel(x=lon, y=lat, method='nearest', drop=True).compute()
     else:
         raise ValueError(f"data_source '{data_source}' not recognized. Use 'API' or 'Cache'.")
         
@@ -612,7 +738,13 @@ def create_site_section(
     return etree.tostring(holder_root).decode()
 
 
-def create_species_section(lon:float, lat:float, specId:int=8) -> str:
+def create_species_section(
+    data_source,
+    lon:float,
+    lat:float, 
+    data_species:xr.DataArray,
+    specId:int,
+    specCat:str) -> str:
     '''
     Create the Species section of the PLO file by reading species data
     
@@ -621,10 +753,15 @@ def create_species_section(lon:float, lat:float, specId:int=8) -> str:
     
     Parameters:
     -----------
+        data_source (str): Source of site data: "API" or "Cache".
+            - "API": Load site data from FULLCAM Data Builder API using provided lon/lat
+            - "Cache": Load site data from local cache files in 'downloaded/' directory.
         lon (float): Longitude of the site.
         lat (float): Latitude of the site.
+        data_species (xr.DataArray): Optional xarray DataArray for species data when using "Cache" mode.
         specId (int): Species ID to load (default: 8 for Eucalyptus globulus).
-    
+        specCat (str): Planting event type. Such as 'Block' or 'Belt' planting.
+
     Returns:
     --------
         str: The Species section as an XML string.
@@ -633,19 +770,33 @@ def create_species_section(lon:float, lat:float, specId:int=8) -> str:
     if specId not in [8]:
         raise ValueError(f"specId '{specId}' not supported. Supported species: "
                          f"8 (Eucalyptus globulus).")
+        
+    if data_source == "API":        # API Data Mode: Load from downloaded files
+        file_path = f'downloaded/species_{lon}_{lat}_specId_{specId}.xml'
+        with open(file_path, 'r', encoding='utf-8') as f:
+            parsed_data = parse_species_data(f.read())
+    elif data_source == "Cache":    # Cache Data Mode: Load from local cache (xarray dataset)
+        parsed_data = data_species.sel(x=lon, y=lat, method='nearest', drop=True).drop_vars('spatial_ref')
+        
+    # Load the species XML file
+    holder_path = f'data/dataholder_specId_{specId}_SpeciesForest.xml'
+    holder_root = etree.parse(holder_path).getroot().findall('SpeciesForest')
     
-    file_path = f'downloaded/species_{lon}_{lat}_specId_{specId}.xml'
-    if not os.path.exists(file_path):
-        get_species(lon, lat, specId)
-        print(f"Downloaded species data for specId {specId} at ({lon}, {lat}).")
-
-    species_root = etree.parse(file_path).getroot().findall('SpeciesForest')
-    if len(species_root) != 1:
-        raise ValueError(f"Expected one SpeciesForest element in {file_path}, found {len(species_root)}")
-    species = etree.tostring(species_root[0]).decode()
+    if len(holder_root) != 1:
+        raise ValueError(f"Expected one SpeciesForest element in {file_path}, found {len(holder_root)}")
+    
+    # Update SpeciesForest element with parsed data
+    species_forest = holder_root[0]
+    for category in parsed_data.data_vars:
+        tyf_G = parsed_data[category].sel(TYF_Type='tyf_G').item()
+        tyf_r = parsed_data[category].sel(TYF_Type='tyf_r').item()
+        species_forest.xpath(f'//TYFCategory[@tTYFCat="{category}"]')[0].set('tyf_G', str(tyf_G))
+        species_forest.xpath(f'//TYFCategory[@tTYFCat="{category}"]')[0].set('tyf_r', str(tyf_r))
+        
+    species = etree.tostring(species_forest, encoding='unicode')
     
     return (
-        f'<SpeciesForestSet count="{len(species_root)}" showOnlyInUse="false">{species}</SpeciesForestSet>'
+        f'<SpeciesForestSet count="{len(holder_root)}" showOnlyInUse="false">{species}</SpeciesForestSet>'
         f'<SpeciesAgricultureSet count="0" showOnlyInUse="false"/>'
     )
 
@@ -654,7 +805,7 @@ def create_soil_section(
     data_source:str = 'API', 
     lon:float=None, 
     lat:float=None, 
-    data_obj:xr.Dataset=None,
+    data_site:xr.Dataset=None,
     yr0TS:int=None
 ) -> str:
     '''
@@ -666,7 +817,7 @@ def create_soil_section(
             - "Cache": Load site data from local cache files in 'downloaded/' directory.
         lon (float): Longitude of the site.
         lat (float): Latitude of the site.
-        data_obj (xr.Dataset): Optional xarray Dataset for site data when using "Cache" mode.
+        data_site (xr.Dataset): Optional xarray Dataset for site data when using "Cache" mode.
         yr0TS (int): Year to set as yr0TS attribute in TimeSeries elements.
         
     Returns:
@@ -678,7 +829,7 @@ def create_soil_section(
         with open(file_path, 'r', encoding='utf-8') as f:
             parsed_data = parse_soil_data(f.read())
     elif data_source == "Cache":    # Cache Data Mode: Load from local cache (xarray dataset)
-        parsed_data = data_obj.sel(x=lon, y=lat, method='nearest', drop=True).compute()
+        parsed_data = data_site.sel(x=lon, y=lat, method='nearest', drop=True).compute()
     else:
         raise ValueError(f"data_source '{data_source}' not recognized. Use 'API' or 'Cache'.")
     
@@ -703,7 +854,7 @@ def create_init_section(
     data_source:str='API', 
     lon: float=None, 
     lat: float=None, 
-    data_obj:xr.Dataset=None,
+    data_site:xr.Dataset=None,
     tsmd_year:int=None
 ) -> str:
     '''
@@ -716,7 +867,7 @@ def create_init_section(
             - "Cache": Load site data from local cache files in 'downloaded/' directory.
         lon (float): Longitude of the site.
         lat (float): Latitude of the site.
-        data_obj (xr.Dataset): Optional xarray Dataset for site data when using "Cache" mode.
+        data_site (xr.Dataset): Optional xarray Dataset for site data when using "Cache" mode.
         tsmd_year (int): Year to use for TSMD initial value extraction.
 
     Returns:
@@ -728,7 +879,7 @@ def create_init_section(
         with open(file_path, 'r', encoding='utf-8') as f:
             soil_init = parse_init_data(f.read(), tsmd_year)
     elif data_source == "Cache":    # Cache Data Mode: Load from local cache (xarray dataset)
-        soil_init = data_obj.sel(x=lon, y=lat, method='nearest', drop=True).compute()
+        soil_init = data_site.sel(x=lon, y=lat, method='nearest', drop=True).compute()
     else:
         raise ValueError(f"data_source '{data_source}' not recognized. Use 'API' or 'Cache'.")
 
@@ -755,29 +906,32 @@ def create_init_section(
     return etree.tostring(holder_init, encoding='unicode')
 
 
-def create_event_section() -> str:
+def create_event_section(specId:int, specCat:str) -> str:
     """
-    Create Event section by reading the raw XML from dataholder_event_block.xml.
-
-    The Event section contains management events such as planting, thinning,
-    harvesting, fertilization, and other silvicultural operations. This function
-    simply reads and returns the event template as-is.
-
+    Create Event section by reading the raw XML from dataholder_specId_{specId}_tTYFCat_{specCat}.xml.
+    
+    Parameters
+    ----------
+    specId : int
+        Species ID to load (default: 8 for Eucalyptus globulus).
+    specCat : str
+        Planting event type. Such as 'Block' or 'Belt' planting.
+    
     Returns
     -------
     str
         The complete EventQ section as an XML string from the dataholder file.
     """
-    event_file_path = "data/dataholder_event_block.xml"
+    plnfEV = f"data/dataholder_specId_{specId}_tTYFCat_{specCat}.xml"
 
-    if not os.path.exists(event_file_path):
+    if not os.path.exists(plnfEV):
         raise FileNotFoundError(
-            f"Required file '{event_file_path}' not found! "
-            f"Ensure dataholder_event_block.xml exists in the data/ directory."
+            f"Required file '{plnfEV}' not found! "
+            f"Ensure dataholder_specId_{specId}_tTYFCat_{specCat}.xml exists in the data/ directory."
         )
 
     # Read and return the raw XML content
-    with open(event_file_path, 'r', encoding='utf-8') as f:
+    with open(plnfEV, 'r', encoding='utf-8') as f:
         return f.read()
 
 
@@ -902,8 +1056,10 @@ def assemble_plo_sections(
     data_source:str='Cache', 
     lon:float=None, 
     lat:float=None, 
-    data_obj:xr.Dataset=None,
-    specId:int=8, 
+    data_site:xr.Dataset=None,
+    data_species:xr.Dataset=None,
+    specId:int=None, 
+    specCat:str=None,
     year_start=2010, 
 ) -> str:
     """Assemble all sections of a PLO file for given lon/lat.
@@ -918,10 +1074,12 @@ def assemble_plo_sections(
         Longitude of the plot.
     lat : float
         Latitude of the plot.
-    data_obj : xr.Dataset, optional
+    data_site : xr.Dataset, optional
         Optional xarray Dataset for site data when using "Cache" mode.
     specId : int, optional
         Species ID to load (default is 8 for Eucalyptus globulus).
+    specCat : str, optional
+        Planting event type. Such as 'Block' or 'Belt' planting.
     year_start : int, optional
         The starting year for the simulation (default is 2010).
     
@@ -931,14 +1089,19 @@ def assemble_plo_sections(
         A dictionary containing all sections of the PLO file as XML strings.
     """
     
-    if data_source not in ['API', 'Cache']:
+    if data_source not in ('API', 'Cache'):
         raise ValueError(f"data_source '{data_source}' not recognized. Use 'API' or 'Cache'.")
+
+    if data_source == 'Cache' and data_site is None:
+        raise ValueError("data_site must be provided when data_source is 'Cache'.")
 
     if data_source == 'API':
         site_file = f'downloaded/siteInfo_{lon}_{lat}.xml'
+        species_file = f'downloaded/species_{lon}_{lat}_specId_{specId}.xml'
         if not os.path.exists(site_file):
             get_siteinfo(lat, lon)
-            print(f'Downloaded site file: {site_file}')
+        if not os.path.exists(species_file):
+            get_species(lon, lat, specId)
 
     return (f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
             f'<DocumentPlot FileType="FullCAM Plot " Version="5009" pageIxDO="10" tDiagram="-1">'
@@ -946,11 +1109,11 @@ def assemble_plo_sections(
                 f'{create_config_section()}\n'
                 f'{create_timing_section()}\n'
                 f'{create_build_section(lon, lat)}\n'
-                f'{create_site_section(data_source, lon, lat, data_obj)}\n'
-                f'{create_species_section(lon, lat, specId)}\n'
-                f'{create_soil_section(data_source, lon, lat, data_obj, year_start)}\n'
-                f'{create_init_section(data_source, lon, lat, data_obj, year_start)}\n'
-                f'{create_event_section()}\n'
+                f'{create_site_section(data_source, lon, lat, data_site)}\n'
+                f'{create_species_section(data_source, lon, lat, data_species, specId, specCat)}\n'
+                f'{create_soil_section(data_source, lon, lat, data_site, year_start)}\n'
+                f'{create_init_section(data_source, lon, lat, data_site, year_start)}\n'
+                f'{create_event_section(specId, specCat)}\n'
                 f'{create_outwinset_section()}\n'
                 f'{create_logentryset_section()}\n'
                 f'{create_mnrl_mulch_section()}\n'

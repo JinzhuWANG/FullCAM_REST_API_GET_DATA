@@ -14,27 +14,32 @@ from scandir_rs import Scandir
 from tqdm.auto import tqdm
 from joblib import Parallel, delayed
 
-def load_cache(cache_file: str = 'downloaded/successful_downloads.txt') -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]], List[Tuple[float, float]]]:
+def load_cache(
+    specId: int,
+    cache_file: str = 'downloaded/successful_downloads.txt'
+) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]], List[Tuple[float, float]]]:
     """
     Load existing downloads from cache file.
 
     Parameters
     ----------
+    specId : int
+        Species ID to filter species and df files.
     cache_file : str, optional
         Path to cache file (default: 'downloaded/successful_downloads.txt')
 
     Returns
     -------
     existing_siteinfo : List[Tuple[float, float]]
-        List of (lat, lon) tuples for existing siteInfo files
+        List of (lon, lat) tuples for existing siteInfo files
     existing_species : List[Tuple[float, float]]
-        List of (lat, lon) tuples for existing species files
+        List of (lon, lat) tuples for existing species files (filtered by specId)
     existing_dfs : List[Tuple[float, float]]
-        List of (lat, lon) tuples for existing simulation dataframe files
+        List of (lon, lat) tuples for existing simulation dataframe files (filtered by specId)
     """
-    lon_lat_reg_xml = re.compile(r'.*_(-?\d+\.\d+)_(-?\d+\.\d+)\.xml')
-    lon_lat_reg_species = re.compile(r'species_(-?\d+\.\d+)_(-?\d+\.\d+)_specId_\d+\.xml')
-    lon_lat_reg_csv = re.compile(r'df_(-?\d+\.\d+)_(-?\d+\.\d+)\.csv')
+    lon_lat_reg_xml = re.compile(r'siteInfo_(-?\d+\.\d+)_(-?\d+\.\d+)\.xml')
+    lon_lat_reg_species = re.compile(r'species_(-?\d+\.\d+)_(-?\d+\.\d+)_specId_(\d+)\.xml')
+    lon_lat_reg_csv = re.compile(r'df_(-?\d+\.\d+)_(-?\d+\.\d+)_specId_(\d+)\.csv')
 
     existing_siteinfo = []
     existing_species = []
@@ -45,25 +50,29 @@ def load_cache(cache_file: str = 'downloaded/successful_downloads.txt') -> Tuple
         return existing_siteinfo, existing_species, existing_dfs
 
     print(f"Loading cache from {cache_file}...")
+    print(f"Filtering for specId={specId}")
 
     with open(cache_file, 'r', encoding='utf-8') as f:
         for line in f:
+            line = line.strip()
 
             if line.startswith('siteInfo_'):
-                match = lon_lat_reg_xml.findall(line)
+                match = lon_lat_reg_xml.match(line)
                 if match:
-                    lon, lat = match[0]
+                    lon, lat = match.groups()
                     existing_siteinfo.append((float(lon), float(lat)))
             elif line.startswith('species_'):
-                match = lon_lat_reg_species.findall(line)
+                match = lon_lat_reg_species.match(line)
                 if match:
-                    lon, lat = match[0]
-                    existing_species.append((float(lon), float(lat)))
+                    lon, lat, file_specId = match.groups()
+                    if int(file_specId) == specId:
+                        existing_species.append((float(lon), float(lat)))
             elif line.startswith('df_'):
-                match = lon_lat_reg_csv.findall(line)
+                match = lon_lat_reg_csv.match(line)
                 if match:
-                    lon, lat = match[0]
-                    existing_dfs.append((float(lon), float(lat)))
+                    lon, lat, file_specId = match.groups()
+                    if int(file_specId) == specId:
+                        existing_dfs.append((float(lon), float(lat)))
 
     print(f"Loaded {len(existing_siteinfo):,} siteInfo, {len(existing_species):,} species, and {len(existing_dfs):,} df entries from cache")
 
@@ -71,6 +80,7 @@ def load_cache(cache_file: str = 'downloaded/successful_downloads.txt') -> Tuple
 
 
 def rebuild_cache(
+    specId: int,
     downloaded_dir: str = 'downloaded',
     cache_file: str = 'downloaded/successful_downloads.txt'
 ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]], List[Tuple[float, float]]]:
@@ -82,21 +92,21 @@ def rebuild_cache(
 
     Parameters
     ----------
+    specId : int
+        Species ID to filter species and df files.
     downloaded_dir : str, optional
         Directory containing downloaded XML files (default: 'downloaded')
     cache_file : str, optional
         Path to cache file to create (default: 'downloaded/successful_downloads.txt')
-    verbose : bool, optional
-        Print progress messages (default: True)
 
     Returns
     -------
     existing_siteinfo : List[Tuple[float, float]]
-        List of (lat, lon) tuples for existing siteInfo files
+        List of (lon, lat) tuples for existing siteInfo files
     existing_species : List[Tuple[float, float]]
-        List of (lat, lon) tuples for existing species files
+        List of (lon, lat) tuples for existing species files (filtered by specId)
     existing_dfs : List[Tuple[float, float]]
-        List of (lat, lon) tuples for existing simulation dataframe files
+        List of (lon, lat) tuples for existing simulation dataframe files (filtered by specId)
     """
 
 
@@ -106,16 +116,17 @@ def rebuild_cache(
 
     print(f"Rebuilding cache by scanning {downloaded_dir} directory...")
     print("This is a one-time slow operation for large directories.")
+    print(f"Filtering for specId={specId}")
 
     files = [entry.path for entry in Scandir(downloaded_dir)]
-    lon_lat_reg_xml = re.compile(r'.*_(-?\d+\.\d+)_(-?\d+\.\d+)\.xml')
-    lon_lat_reg_species = re.compile(r'species_(-?\d+\.\d+)_(-?\d+\.\d+)_specId_\d+\.xml')
-    lon_lat_reg_csv = re.compile(r'df_(-?\d+\.\d+)_(-?\d+\.\d+)\.csv')
+    lon_lat_reg_xml = re.compile(r'siteInfo_(-?\d+\.\d+)_(-?\d+\.\d+)\.xml')
+    lon_lat_reg_species = re.compile(r'species_(-?\d+\.\d+)_(-?\d+\.\d+)_specId_(\d+)\.xml')
+    lon_lat_reg_csv = re.compile(r'df_(-?\d+\.\d+)_(-?\d+\.\d+)_specId_(\d+)\.csv')
 
     siteinfo_files = []
     species_files = []
     df_files = []
-    
+
     existing_siteinfo = []
     existing_species = []
     existing_dfs = []
@@ -129,19 +140,21 @@ def rebuild_cache(
             if match:
                 lon, lat = match.groups()
                 siteinfo_files.append(filename)
-                existing_siteinfo.append((float(lat), float(lon)))
+                existing_siteinfo.append((float(lon), float(lat)))
         elif filename.startswith('species_'):
             match = lon_lat_reg_species.match(filename)
             if match:
-                lon, lat = match.groups()
+                lon, lat, file_specId = match.groups()
                 species_files.append(filename)
-                existing_species.append((float(lat), float(lon)))
+                if int(file_specId) == specId:
+                    existing_species.append((float(lon), float(lat)))
         elif filename.startswith('df_'):
             match = lon_lat_reg_csv.match(filename)
             if match:
-                lat, lon = match.groups()
+                lon, lat, file_specId = match.groups()
                 df_files.append(filename)
-                existing_dfs.append((float(lat), float(lon)))
+                if int(file_specId) == specId:
+                    existing_dfs.append((float(lon), float(lat)))
 
 
     with open(cache_file, 'w', encoding='utf-8') as f:
@@ -161,8 +174,9 @@ def rebuild_cache(
 
 
 def get_existing_downloads(
+    specId: int,
     cache_file: str = 'downloaded/successful_downloads.txt',
-    downloaded_dir: str = 'downloaded',
+    downloaded_dir: str = 'downloaded'
 ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]], List[Tuple[float, float]]]:
     """
     Get existing downloads from cache, rebuilding if necessary.
@@ -173,6 +187,8 @@ def get_existing_downloads(
 
     Parameters
     ----------
+    specId : int
+        Species ID to filter species and df files.
     cache_file : str, optional
         Path to cache file (default: 'downloaded/successful_downloads.txt')
     downloaded_dir : str, optional
@@ -181,20 +197,20 @@ def get_existing_downloads(
     Returns
     -------
     existing_siteinfo : List[Tuple[float, float]]
-        List of (lat, lon) tuples for existing siteInfo files
+        List of (lon, lat) tuples for existing siteInfo files
     existing_species : List[Tuple[float, float]]
-        List of (lat, lon) tuples for existing species files
+        List of (lon, lat) tuples for existing species files (filtered by specId)
     existing_dfs : List[Tuple[float, float]]
-        List of (lat, lon) tuples for existing simulation dataframe files
+        List of (lon, lat) tuples for existing simulation dataframe files (filtered by specId)
 
     """
     # Try to load from cache first
     if os.path.exists(cache_file):
-        return load_cache(cache_file)
+        return load_cache(specId, cache_file)
 
     # Cache doesn't exist - rebuild it
     print(f"Cache file not found: {cache_file}")
-    return rebuild_cache(downloaded_dir, cache_file)
+    return rebuild_cache(specId, downloaded_dir, cache_file)
 
 
 def _remove_single_file(filepath: str) -> Tuple[str, bool, str]:
@@ -283,7 +299,5 @@ def batch_remove_files(
             print(f"  {os.path.basename(filepath)}: {error}")
         if len(failures) > 10:
             print(f"  ... and {len(failures) - 10:,} more failures")
-    else:
-        rebuild_cache()
 
     return success_count, len(failures), failures
