@@ -24,10 +24,25 @@ This is a Python toolkit for Australia's **FullCAM (Full Carbon Accounting Model
 
 ### Quick Start (Most Common Task)
 
-**Generate PLO file from cached data:**
+**Generate PLO file from cached data (recommended for bulk processing):**
 ```python
+import xarray as xr
 from tools import assemble_plo_sections
-plo_xml = assemble_plo_sections(lon=148.16, lat=-35.61, year_start=2010)
+
+# Load pre-assembled data caches
+data_site = xr.open_dataset("data/data_assembled/siteinfo_cache.nc")
+data_species = xr.open_dataset("data/Species_TYF_R/specId_8_match_LUTO.nc")
+
+# Generate PLO file
+plo_xml = assemble_plo_sections(
+    data_source='Cache',
+    lon=148.16, lat=-35.61,
+    data_site=data_site,
+    data_species=data_species,
+    specId=8,           # Eucalyptus globulus
+    specCat='Block',    # Block planting
+    year_start=2010
+)
 ```
 
 **Run simulation:**
@@ -37,7 +52,7 @@ import os
 
 url = "https://api.climatechange.gov.au/climate/carbon-accounting/2024/plot/v1/2024/fullcam-simulator/run-plotsimulation"
 headers = {"Ocp-Apim-Subscription-Key": os.getenv("FULLCAM_API_KEY")}
-get_plot_simulation(lon, lat, url, headers)
+get_plot_simulation('Cache', lon, lat, data_site, data_species, specId=8, specCat='Block', url=url, headers=headers)
 ```
 
 ## Key Implementation Details
@@ -45,15 +60,23 @@ get_plot_simulation(lon, lat, url, headers)
 **Critical Rules:**
 - All PLO section functions return XML fragments (no `<?xml?>` declaration)
 - Boolean attributes use strings: `"true"/"false"` not Python booleans
-- Data loaded from `downloaded/siteInfo_{lon}_{lat}.xml`
+- Two data modes: `"API"` (per-location download) or `"Cache"` (pre-assembled NetCDF)
 - Cache index at `downloaded/successful_downloads.txt` enables fast startup
 - API key stored in `FULLCAM_API_KEY` environment variable (never hardcode)
 - **NEVER** read XML from `downloaded/` directory directly - use examples in `data/` folder
 
-**Supported Species:**
-- `Eucalyptus_globulus` (default)
-- `Mallee_eucalypt`
-- `Environmental_plantings`
+**Data Modes:**
+| Mode | Description | Performance |
+|------|-------------|-------------|
+| `"API"` | Downloads data per location from FullCAM REST API | Slow, use for testing |
+| `"Cache"` | Loads from pre-assembled `siteinfo_cache.nc` + species NetCDF | Fast, use for bulk |
+
+**Currently Supported Species (specId):**
+- `8` - Eucalyptus globulus (default, with TYF calibration)
+
+**Planting Categories (specCat):**
+- `"Block"` - Block planting configuration
+- `"Belt"` - Belt/shelterbelt planting configuration
 
 ## Project Structure
 
@@ -64,10 +87,16 @@ get_plot_simulation(lon, lat, url, headers)
 ├── README.md                            # User documentation
 ├── CLAUDE.md                            # This file (navigation hub)
 ├── data/                                # Templates and examples
-│   ├── dataholder_*.xml                 # PLO section templates (8 files)
-│   ├── dataholder_species_*.xml         # Species-specific templates (3 files)
+│   ├── dataholder_*.xml                 # PLO section templates
+│   ├── dataholder_specId_*.xml          # Species-specific templates (events, TYF params)
 │   ├── siteInfo_*.xml                   # Example API responses
-│   ├── lumap.tif                        # LUTO land use raster
+│   ├── lumap.tif                        # LUTO land use raster (spatial template)
+│   ├── ANUClim/                         # Climate data from NCI
+│   ├── FPI_lys/                         # Forest Productivity Index layers
+│   ├── maxAbgMF/                        # Max aboveground mass data
+│   ├── Soil_landscape_AUS/              # Soil clay content data
+│   ├── Species_TYF_R/                   # Species TYF coefficients (tyf_G, tyf_r)
+│   ├── data_assembled/                  # Assembled siteInfo cache (NC/Zarr)
 │   └── processed/                       # NetCDF/GeoTIFF outputs
 ├── docs/                                # Documentation
 │   ├── claude/                          # Claude Code guides
@@ -79,25 +108,25 @@ get_plot_simulation(lon, lat, url, headers)
 │   └── FullCAM Databuilder API Documentation v0.1 DRAFT.pdf
 ├── downloaded/                          # API cache (excluded from git)
 │   ├── siteInfo_{lon}_{lat}.xml         # Climate/soil/FPI data
-│   ├── species_{lon}_{lat}.xml          # Species parameters
-│   ├── df_{lon}_{lat}.csv               # Simulation results
+│   ├── species_{lon}_{lat}_specId_{id}.xml  # Species parameters
+│   ├── df_{lon}_{lat}_specId_{id}.csv   # Simulation results
 │   └── successful_downloads.txt         # Cache index
 └── tools/                               # Libraries and utilities
-    ├── __init__.py                      # Core PLO functions + API utilities
+    ├── __init__.py                      # Core PLO functions + API utilities (1100+ lines)
     ├── XML2Data.py                      # Parse API cache XML
     ├── FullCAM2020_to_NetCDF/           # Legacy FullCAM 2020 processing
-    │   ├── __init__.py                  # PLO XML parsing functions
+    │   ├── __init__.py                  # PLO XML parsing + GeoTIFF export
     │   ├── XML2NC_PLO.py                # Convert PLO files to NetCDF
     │   └── Compare_PLO_SiteInfo.py      # Compare PLO vs API data
     ├── Get_data/                        # Data acquisition utilities
-    │   ├── assemble_data.py             # Assemble data from sources
-    │   ├── get_ANUClim.py               # Download ANUClim climate data
-    │   ├── get_FPI_lyrs.py              # Get FPI layers
-    │   ├── get_SoilClay.py              # Get soil clay fraction
-    │   ├── get_maxAbgMF.py              # Get max aboveground mass
-    │   └── get_TYR_R.py                 # Transform TYR R species data
+    │   ├── assemble_data.py             # Assemble all sources → siteinfo_cache.nc
+    │   ├── get_ANUClim.py               # Download ANUClim v2.0 climate data
+    │   ├── get_FPI_lyrs.py              # Extract FPI layers from 37 grids
+    │   ├── get_SoilClay.py              # Extract soil clay fraction (90m→1km)
+    │   ├── get_maxAbgMF.py              # Extract max aboveground mass
+    │   └── get_TYR_R.py                 # Transform TYF R coefficients for species
     └── helpers/                         # Helper utilities
-        ├── cache_manager.py             # Cache management
+        ├── cache_manager.py             # Cache management (fast startup)
         ├── batch_manipulate_XML.py      # Batch XML processing
         └── get_fullcam_help.py          # Documentation helper
 ```
@@ -106,35 +135,37 @@ get_plot_simulation(lon, lat, url, headers)
 
 | Task | Command/Code |
 |------|-------------|
-| Generate PLO file | `assemble_plo_sections(lon, lat, year_start)` |
-| Run simulation | `get_plot_simulation(lon, lat, url, headers)` |
+| Generate PLO file | `assemble_plo_sections('Cache', lon, lat, data_site, data_species, specId, specCat)` |
+| Run simulation | `get_plot_simulation('Cache', lon, lat, data_site, data_species, specId, specCat, url, headers)` |
 | Convert to NetCDF | `python FullCAM2NC.py` |
-| Load cache | `get_existing_downloads()` |
-| Rebuild cache | `rebuild_cache()` |
-| Get coordinates | `get_downloading_coords(resfactor=10)` |
+| Load cache | `get_existing_downloads(specId=8)` |
+| Rebuild cache | `rebuild_cache(specId=8)` |
+| Get coordinates | `get_downloading_coords(resfactor=3)` |
+| Assemble data | `python tools/Get_data/assemble_data.py` |
+| Transform species | `python tools/Get_data/get_TYR_R.py` |
 
 ## Key Functions in tools/__init__.py
 
 ### PLO Generation
-- `assemble_plo_sections(lon, lat, species, year_start)` - Generate complete PLO file
+- `assemble_plo_sections(data_source, lon, lat, data_site, data_species, specId, specCat, year_start)` - Generate complete PLO file
 - `create_meta_section()` - Plot metadata
-- `create_config_section()` - Simulation configuration
-- `create_timing_section()` - Time range settings
-- `create_build_section()` - Geographic location
-- `create_site_section()` - Climate time series
-- `create_species_section()` - Species parameters
-- `create_soil_section()` - Soil properties
-- `create_init_section()` - Initial carbon pools
-- `create_event_section()` - Management events
+- `create_config_section(tPlot)` - Simulation configuration (CompF, SoilF, CompA, SoilA, CompM)
+- `create_timing_section(stYrYTZ, enYrYTZ, stepsPerYrYTZ)` - Time range settings
+- `create_build_section(lonBL, latBL)` - Geographic location
+- `create_site_section(data_source, lon, lat, data_site)` - Climate time series
+- `create_species_section(data_source, lon, lat, data_species, specId, specCat)` - Species parameters
+- `create_soil_section(data_source, lon, lat, data_site, yr0TS)` - Soil properties
+- `create_init_section(data_source, lon, lat, data_site, tsmd_year)` - Initial carbon pools
+- `create_event_section(specId, specCat)` - Management events
 - `create_outwinset_section()` - Output settings
 - `create_logentryset_section()` - Audit log
 - `create_mnrl_mulch_section()` - Nitrogen cycling
 - `create_other_info_section()` - Economic settings
 
 ### API Utilities
-- `get_siteinfo(lat, lon)` - Download siteInfo with consensus mechanism
-- `get_species(lat, lon)` - Download species data
-- `get_plot_simulation(lon, lat, url, headers)` - Run simulation via API
+- `get_siteinfo(lat, lon, sim_start_year, consensus_count)` - Download siteInfo with consensus mechanism
+- `get_species(lon, lat, specId, consensus_count)` - Download species data
+- `get_plot_simulation(data_source, lon, lat, data_site, data_species, specId, specCat, url, headers)` - Run simulation via API
 - `get_downloading_coords(resfactor)` - Get grid coordinates from LUTO raster
 
 ## Key Functions in tools/XML2Data.py
@@ -148,9 +179,87 @@ get_plot_simulation(lon, lat, url, headers)
 
 ## Key Functions in tools/helpers/cache_manager.py
 
-- `load_cache(cache_file)` - Load existing downloads from cache
-- `rebuild_cache(downloaded_dir, cache_file)` - Rebuild cache from directory
-- `get_existing_downloads()` - Main entry point for cache access
+- `load_cache(specId, cache_file)` - Load existing downloads from cache file
+- `rebuild_cache(specId, downloaded_dir, cache_file)` - Rebuild cache from directory scan
+- `get_existing_downloads(specId, cache_file, downloaded_dir)` - Main entry point for cache access
+- `batch_remove_files(pattern, directory, n_jobs)` - Batch delete files by pattern
+
+## Key Functions in tools/Get_data/
+
+### assemble_data.py
+Assembles data from multiple sources into a unified LUTO-aligned grid.
+
+**Inputs:**
+- `data/ANUClim/processed/ANUClim_to_FullCAM.nc` - Climate data
+- `data/FPI_lys/FPI_lyrs.nc` - Forest Productivity Index
+- `data/processed/BB_PLO_OneKm/siteinfo_PLO_RES.nc` - maxAbgMF, fpiAvgLT
+- `data/Soil_landscape_AUS/ClayContent/clayFrac_00_30cm.tif` - Soil clay
+- `data/processed/BB_PLO_OneKm/soilInit_PLO_RES.nc` - Soil init values
+
+**Output:**
+- `data/data_assembled/siteinfo_cache.nc` - Complete assembled dataset
+- `data/data_assembled/siteinfo_cache.zarr` - Zarr format (faster loading)
+
+**Variables in siteinfo_cache.nc:**
+| Variable | Dimensions | Description |
+|----------|------------|-------------|
+| `avgAirTemp` | (year, month, y, x) | Average air temperature (°C) |
+| `rainfall` | (year, month, y, x) | Monthly rainfall (mm) |
+| `openPanEvap` | (year, month, y, x) | Open pan evaporation (mm) |
+| `forestProdIx` | (year, y, x) | Forest Productivity Index |
+| `maxAbgMF` | (y, x) | Max aboveground mass for forest |
+| `fpiAvgLT` | (y, x) | Long-term average FPI |
+| `clayFrac` | (y, x) | Soil clay fraction (0-1) |
+| `rpmaCMInitF` | (y, x) | Initial resistant plant material carbon |
+| `humsCMInitF` | (y, x) | Initial humus carbon |
+| `inrtCMInitF` | (y, x) | Initial inert carbon |
+| `TSMDInitF` | (y, x) | Initial topsoil moisture deficit |
+
+### get_ANUClim.py
+Downloads ANUClim v2.0 climate data from NCI Thredds server.
+
+**Parameters:**
+- Variables: `evap`, `frst`, `pw`, `rain`, `srad`, `tavg`, `tmax`, `tmin`, `vp`, `vpd`
+- Cadence: `daily` or `monthly`
+- Years: 1970-2024
+
+**Output:** `data/ANUClim/processed/ANUClim_to_FullCAM.nc`
+
+### get_FPI_lyrs.py
+Extracts Forest Productivity Index from 37 regional TIFF files.
+
+**Input:** `data/FPI_lys/FPI_tiff/s{grid}_fpi_7022/`
+**Output:** `data/FPI_lys/FPI_lyrs.nc`
+
+### get_SoilClay.py
+Extracts soil clay fraction from 90m resolution soil landscape data.
+
+**Input:** `data/Soil_landscape_AUS/ClayContent/000055684v002/data/`
+**Output:** `data/Soil_landscape_AUS/ClayContent/clayFrac_00_30cm.tif`
+
+### get_maxAbgMF.py
+Extracts maximum aboveground mass fraction for forest.
+
+**Input:** `data/maxAbgMF/Site potential and FPI version 2_0/`
+**Output:** `data/processed/maxAbgMF_*.tif`
+
+### get_TYR_R.py
+Transforms TYF R (Tree Yield Formula) coefficients for species to match LUTO spatial template.
+
+**Input:** `data/processed/species_RES.nc`
+**Output:**
+- `data/Species_TYF_R/specId_8_match_LUTO.nc` - Complete dataset
+- `data/Species_TYF_R/specId_8_{var}_{TYF_Type}.tif` - Per-variable GeoTIFFs
+
+**TYF Parameters:**
+| Parameter | Description |
+|-----------|-------------|
+| `tyf_G` | Growth rate parameter |
+| `tyf_r` | Decay rate parameter |
+
+**TYF Types (planting categories):**
+- `Block` - Block planting configuration
+- `Belt` - Belt/shelterbelt planting configuration
 
 ## Documentation Index
 

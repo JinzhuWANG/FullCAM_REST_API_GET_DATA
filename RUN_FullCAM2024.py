@@ -25,7 +25,7 @@ url = f"{BASE_URL_SIM}{ENDPOINT}"
 headers = {"Ocp-Apim-Subscription-Key": API_KEY}
 
 # Define download parameters
-RES_factor = 5
+RES_factor = 3
 SPECIES_ID = 8  # Eucalyptus globulus
 
 # Get resfactored coords for downloading
@@ -34,8 +34,13 @@ RES_factor_coords = scrap_coords.set_index(['x', 'y']).index.tolist()
 
 # Load existing downloaded files from cache
 existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(SPECIES_ID)
-to_request_coords = set(RES_factor_coords) - set(existing_dfs)
-to_request_coords = set((round(x, 2), round(y, 2)) for x, y in to_request_coords)
+existing_dfs_set = set((x, y) for x, y in existing_dfs)
+
+# Filter coords while preserving row order from scrap_coords
+to_request_coords = [
+    (x, y) for x, y in zip(scrap_coords['x'], scrap_coords['y'])
+    if (x, y) not in existing_dfs_set
+]
 
 
 
@@ -55,7 +60,7 @@ tasks = [
     for lon, lat in to_request_coords
 ]
 
-for _ in tqdm(Parallel(n_jobs=128, return_as='generator_unordered', backend='threading')(tasks), total=len(tasks)):
+for _ in tqdm(Parallel(n_jobs=256, return_as='generator_unordered', backend='threading')(tasks), total=len(tasks)):
     pass
 
 

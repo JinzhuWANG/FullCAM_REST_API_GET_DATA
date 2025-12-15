@@ -14,7 +14,9 @@
       "Bash(findstr:*)",
       "Bash(\"F:\\Users\\jinzhu\\Documents\\miniforge\\envs\\luto\\python.exe\":*)",
       "Bash(powershell -Command \"vssadmin list shadows /for=N:\")",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(wc:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

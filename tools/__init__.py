@@ -43,9 +43,21 @@ def get_downloading_coords(resfactor:int=10):
     '''
 
     # Get all lon/lat for Australia; the raster used is taken from the template of LUTO
-    Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True).compute() >= -1 # >=1 means the continental Australia 
+    Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True).compute() >= -1 # >=1 means the continental Australia
     lon_lat = Aus_xr.to_dataframe(name='mask').reset_index()[['y', 'x', 'mask']]
     lon_lat['cell_idx'] = range(len(lon_lat))
+
+    # Create block index (256x256 blocks, numbered in row-major order)
+    ny, nx = Aus_xr.shape
+    block_size = 256
+    n_blocks_x = int(np.ceil(nx / block_size))
+
+    # For each cell, compute which block it belongs to
+    y_idx = np.arange(ny).repeat(nx)  # row indices for each cell
+    x_idx = np.tile(np.arange(nx), ny)  # col indices for each cell
+    block_i = y_idx // block_size  # block row
+    block_j = x_idx // block_size  # block col
+    lon_lat['block_idx'] = block_i * n_blocks_x + block_j
 
     Aus_cell = xr.DataArray(np.arange(Aus_xr.size).reshape(Aus_xr.shape), coords=Aus_xr.coords, dims=Aus_xr.dims)
     Aus_cell_RES = Aus_cell.isel(x=slice(None, None, resfactor), y=slice(None, None, resfactor))
@@ -56,7 +68,7 @@ def get_downloading_coords(resfactor:int=10):
         .query('mask == True')
         .loc[lon_lat['cell_idx'].isin(Aus_cell_RES_df['cell_idx'])]
         .drop(columns=['mask', 'cell_idx'])
-        .sort_values(by=['x', 'y'])
+        .sort_values(by=['block_idx', 'x', 'y'])  # Sort by block first, then x, y within block
         .reset_index(drop=True)
     ).round({'x': 4, 'y': 4})
     
