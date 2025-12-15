@@ -37,13 +37,19 @@ _cache_write_lock = Lock()
 # HELPER FUNCTIONS
 # ============================================================================
 
-def get_downloading_coords(resfactor:int=10):
+def get_downloading_coords(resfactor:int=10, include_region:str='ALL') -> pd.DataFrame:
     '''
     Base on LUTO's spatial template (data/lumap.tif), get resfactored lon/lat coords.
     '''
 
     # Get all lon/lat for Australia; the raster used is taken from the template of LUTO
-    Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True).compute() >= -1 # >=1 means the continental Australia
+    if include_region == 'ALL':
+        Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True).compute() >= -1 # >=1 means the continental Australia
+    elif include_region == 'LUTO':
+        Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True).compute() >= 0  # >=0 means only include inside LUTO study area
+    else:
+        raise ValueError("`include_region` must be either 'ALL' or 'LUTO'.")
+    
     lon_lat = Aus_xr.to_dataframe(name='mask').reset_index()[['y', 'x', 'mask']]
     lon_lat['cell_idx'] = range(len(lon_lat))
 

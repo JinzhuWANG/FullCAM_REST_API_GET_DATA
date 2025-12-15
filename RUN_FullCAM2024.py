@@ -29,7 +29,7 @@ RES_factor = 3
 SPECIES_ID = 8  # Eucalyptus globulus
 
 # Get resfactored coords for downloading
-scrap_coords = get_downloading_coords(resfactor=RES_factor)
+scrap_coords = get_downloading_coords(resfactor=RES_factor, include_region='LUTO')
 RES_factor_coords = scrap_coords.set_index(['x', 'y']).index.tolist()
 
 # Load existing downloaded files from cache
@@ -60,7 +60,7 @@ tasks = [
     for lon, lat in to_request_coords
 ]
 
-for _ in tqdm(Parallel(n_jobs=256, return_as='generator_unordered', backend='threading')(tasks), total=len(tasks)):
+for _ in tqdm(Parallel(n_jobs=64, return_as='generator_unordered', backend='threading')(tasks), total=len(tasks)):
     pass
 
 
