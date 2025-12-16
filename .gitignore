@@ -1,6 +1,5 @@
 .claude/settings.local.json
 __pycache__/
 downloaded/
-data/*
+data/*/
 files.pkl
-.claude/settings.local.json

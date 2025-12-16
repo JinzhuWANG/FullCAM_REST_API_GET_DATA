@@ -1,0 +1,11 @@
+<EventQ count="1">
+    <Event tEV="PlnF" clearEV="false" onEV="true" dateOriginEV="StartSim" nYrsFromStEV="0" nDaysFromStEV="0" tFaqEV="Blank" tAaqEV="Blank" aqStYrEV="1990" aqEnYrEV="2100" nmEV="Establish environmental plantings - in riparian or floodplain zones" categoryEV="CatUndef" tEvent="Doc" idSP="7" regimeInstance="ee8ce4f6-2c10-4755-bead-565888c09559" nmRegime="New Regime">
+        <notesEV/>
+        <PlnF tStemPlnF="Mass" agePlnF="0.5" stemVolPlnF="" stemMPlnF="0.583" branMPlnF="0.397" barkMPlnF="0.171" leafMPlnF="0.262" cortMPlnF="0.492" firtMPlnF="0.095" stemNCRatioPlnF="" branNCRatioPlnF="" barkNCRatioPlnF="" leafNCRatioPlnF="" cortNCRatioPlnF="" firtNCRatioPlnF="" storNMPlnF="" fixPlnF="" phaPlnF="" tTYFCat="Water" treeNmPlnF="Environmental plantings"/>
+        <dateEV CalendarSystemT="FixedLength">20100101</dateEV>
+    </Event>
+    <HeaderState sortIx="0" sortUp="true" sortBy1="false" sortBy2="false" showOnlyHS="false">
+        <headSectW>80,270,785,270,270,0</headSectW>
+    </HeaderState>
+    <showEvT>t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,t,f</showEvT>
+</EventQ>
