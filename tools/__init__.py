@@ -33,6 +33,53 @@ HEADERS = {
 # Thread-safe lock for cache file writes
 _cache_write_lock = Lock()
 
+
+# Species id to name mapping
+SPECIES_MAP = {
+    0: "Acacia Forest and Woodlands",
+    1: "Acacia mangium",
+    2: "Acacia Open Woodland",
+    3: "Acacia Shrubland",
+    4: "Callitris Forest and Woodlands",
+    5: "Casuarina Forest and Woodland",
+    6: "Chenopod Shrub; Samphire Shrub and Forbland",
+    7: "Environmental plantings",
+    8: "Eucalyptus globulus",
+    9: "Eucalyptus grandis",
+    10: "Eucalyptus Low Open Forest",
+    11: "Eucalyptus nitens",
+    12: "Eucalyptus Open Forest",
+    13: "Eucalyptus Open Woodland",
+    14: "Eucalyptus Tall Open Forest",
+    15: "Eucalyptus urophylla or pellita",
+    16: "Eucalyptus Woodland",
+    17: "Heath",
+    22: "Low Closed Forest and Closed Shrublands",
+    23: "Mallee eucalypt species",
+    24: "Mallee Woodland and Shrubland",
+    25: "Mangrove",
+    27: "Melaleuca Forest and Woodland",
+    31: "Native species and revegetation <500mm rainfall",
+    32: "Native species and revegetation >=500mm rainfall",
+    33: "Native Species Regeneration <500mm rainfall",
+    34: "Native Species Regeneration >=500mm rainfall",
+    38: "Other acacia",
+    39: "Other eucalypts",
+    40: "Other Forests and Woodlands",
+    41: "Other non-eucalypts hardwoods",
+    42: "Other Shrublands",
+    43: "Other softwoods",
+    45: "Pinus hybrids",
+    46: "Pinus pinaster",
+    47: "Pinus radiata",
+    48: "Rainforest and vine thickets",
+    49: "Tropical Eucalyptus woodlands/grasslands",
+    51: "Unclassified Native vegetation",
+}
+
+
+
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
@@ -357,52 +404,6 @@ def get_plot_simulation(
     Returns
     -------
         None if successful, else (lon, lat), "Failed" on failure.
-        
-        
-    The valid species IDs are:
-        ====  ================================================
-        ID    Species Name
-        ====  ================================================
-        0     Acacia Forest and Woodlands
-        1     Acacia mangium
-        2     Acacia Open Woodland
-        3     Acacia Shrubland
-        4     Callitris Forest and Woodlands
-        5     Casuarina Forest and Woodland
-        6     Chenopod Shrub; Samphire Shrub and Forbland
-        7     Environmental plantings
-        8     Eucalyptus globulus (default)
-        9     Eucalyptus grandis
-        10    Eucalyptus Low Open Forest
-        11    Eucalyptus nitens
-        12    Eucalyptus Open Forest
-        13    Eucalyptus Open Woodland
-        14    Eucalyptus Tall Open Forest
-        15    Eucalyptus urophylla or pellita
-        16    Eucalyptus Woodland
-        17    Heath
-        22    Low Closed Forest and Closed Shrublands
-        23    Mallee eucalypt species
-        24    Mallee Woodland and Shrubland
-        25    Mangrove
-        27    Melaleuca Forest and Woodland
-        31    Native species and revegetation <500mm rainfall
-        32    Native species and revegetation >=500mm rainfall
-        33    Native Species Regeneration <500mm rainfall
-        34    Native Species Regeneration >=500mm rainfall
-        38    Other acacia
-        39    Other eucalypts
-        40    Other Forests and Woodlands
-        41    Other non-eucalypts hardwoods
-        42    Other Shrublands
-        43    Other softwoods
-        45    Pinus hybrids
-        46    Pinus pinaster
-        47    Pinus radiata
-        48    Rainforest and vine thickets
-        49    Tropical Eucalyptus woodlands/grasslands
-        51    Unclassified Native vegetation
-        ====  ================================================
     '''
     
 
@@ -410,7 +411,7 @@ def get_plot_simulation(
     for attempt in range(try_number):
         try:
             plo_str = assemble_plo_sections(data_source, lon, lat, data_site, data_species, specId, specCat)
-                        
+  
             response = requests.post(
                 url, 
                 files={'file': ('my_plo.plo', plo_str)}, 
@@ -762,8 +763,7 @@ def create_species_section(
     lon:float,
     lat:float, 
     data_species:xr.DataArray,
-    specId:int,
-    specCat:str) -> str:
+    specId:int) -> str:
     '''
     Create the Species section of the PLO file by reading species data
     
@@ -786,19 +786,16 @@ def create_species_section(
         str: The Species section as an XML string.
     
     '''
-    if specId not in [8]:
-        raise ValueError(f"specId '{specId}' not supported. Supported species: "
-                         f"8 (Eucalyptus globulus).")
-        
+
     if data_source == "API":        # API Data Mode: Load from downloaded files
         file_path = f'downloaded/species_{lon}_{lat}_specId_{specId}.xml'
         with open(file_path, 'r', encoding='utf-8') as f:
             parsed_data = parse_species_data(f.read())
     elif data_source == "Cache":    # Cache Data Mode: Load from local cache (xarray dataset)
-        parsed_data = data_species.sel(x=lon, y=lat, method='nearest', drop=True).drop_vars('spatial_ref')
+        parsed_data = data_species.sel(x=lon, y=lat, method='nearest', drop=True).drop_vars('spatial_ref').compute()
         
     # Load the species XML file
-    holder_path = f'data/dataholder_specId_{specId}_SpeciesForest.xml'
+    holder_path = f'data/dataholder_SpeciesForest_specId_{specId}.xml'
     holder_root = etree.parse(holder_path).getroot().findall('SpeciesForest')
     
     if len(holder_root) != 1:
@@ -874,7 +871,8 @@ def create_init_section(
     lon: float=None, 
     lat: float=None, 
     data_site:xr.Dataset=None,
-    tsmd_year:int=None
+    tsmd_year:int=None,
+    specId:int=None
 ) -> str:
     '''
     Create the Init section of the PLO file by reading siteinfo data and calculating
@@ -905,6 +903,8 @@ def create_init_section(
 
     # Load the dataholder_init.xml template
     holder_init = etree.parse("data/dataholder_init.xml").getroot()
+    
+    holder_init.xpath('//Init/InitTreeF')[0].set('treeNmInit', SPECIES_MAP[specId])
 
     # Update InitSoilF element
     init_soil_f = holder_init.xpath('.//InitSoilF')[0]
@@ -941,16 +941,16 @@ def create_event_section(specId:int, specCat:str) -> str:
     str
         The complete EventQ section as an XML string from the dataholder file.
     """
-    plnfEV = f"data/dataholder_specId_{specId}_tTYFCat_{specCat}.xml"
+    plant_event = f"data/dataholder_Event_specId_{specId}_tTYFCat_{specCat}.xml"
 
-    if not os.path.exists(plnfEV):
+    if not os.path.exists(plant_event):
         raise FileNotFoundError(
-            f"Required file '{plnfEV}' not found! "
+            f"Required file '{plant_event}' not found! "
             f"Ensure dataholder_specId_{specId}_tTYFCat_{specCat}.xml exists in the `data` directory."
         )
 
     # Read and return the raw XML content
-    with open(plnfEV, 'r', encoding='utf-8') as f:
+    with open(plant_event, 'r', encoding='utf-8') as f:
         return f.read()
 
 
@@ -1121,6 +1121,14 @@ def assemble_plo_sections(
             get_siteinfo(lat, lon)
         if not os.path.exists(species_file):
             get_species(lon, lat, specId)
+            
+    if specId not in [7, 8, 23]:
+        raise ValueError(
+            f"specId '{specId}' not supported. Supported species: \n"
+            f"8 (Eucalyptus globulus).\n"
+            f"7 (Environmental plantings).\n"
+            f"23 (Mallee eucalypt species)."
+        )
 
     return (f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
             f'<DocumentPlot FileType="FullCAM Plot " Version="5009" pageIxDO="10" tDiagram="-1">'
@@ -1129,9 +1137,9 @@ def assemble_plo_sections(
                 f'{create_timing_section()}\n'
                 f'{create_build_section(lon, lat)}\n'
                 f'{create_site_section(data_source, lon, lat, data_site)}\n'
-                f'{create_species_section(data_source, lon, lat, data_species, specId, specCat)}\n'
+                f'{create_species_section(data_source, lon, lat, data_species, specId)}\n'
                 f'{create_soil_section(data_source, lon, lat, data_site, year_start)}\n'
-                f'{create_init_section(data_source, lon, lat, data_site, year_start)}\n'
+                f'{create_init_section(data_source, lon, lat, data_site, year_start, specId)}\n'
                 f'{create_event_section(specId, specCat)}\n'
                 f'{create_outwinset_section()}\n'
                 f'{create_logentryset_section()}\n'

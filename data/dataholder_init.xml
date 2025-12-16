@@ -1,4 +1,5 @@
 <Init>
+    <!-- The treeNmInit need to be updated -->
     <InitTreeF treeExistsInit="false" maxTreeAgeInit="" avgTreeAgeInit="" tInitStem="Vol" stemMInitF="" branMInitF="" barkMInitF="" leafMInitF="" cortMInitF="" firtMInitF="" stemVolInitF="" stemFracInitF="" branFracInitF="" barkFracInitF="" leafFracInitF="" cortFracInitF="" firtFracInitF="" stemNCRatioInitF="" branNCRatioInitF="" barkNCRatioInitF="" leafNCRatioInitF="" cortNCRatioInitF="" firtNCRatioInitF="" storNMInitF="" stemM3PGInit="" foliM3PGInit="" rootM3PGInit="" nStemsInit="" tTYFCatInitF="Custom" frFracInit="" tFrFracInit="FracConst" treeNmInit="Eucalyptus globulus"/>
     <InitCropA cropExistsInit="" maxCropAgeInit="" avgCropAgeInit="" gbfrMInitA="" stlkMInitA="" leafMInitA="" cortMInitA="" firtMInitA="" gbfrNCRatioInitA="" stlkNCRatioInitA="" leafNCRatioInitA="" cortNCRatioInitA="" firtNCRatioInitA="" storNMInitA="" cropNmInit=""/>
     <InitSDwdF sDStemCMInitF="0" sDBranCMInitF="0" sDBlitCMInitF="0" sDLlitCMInitF="0" sDCodrCMInitF="0" sDFidrCMInitF="0"/>

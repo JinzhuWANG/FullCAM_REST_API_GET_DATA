@@ -24,8 +24,8 @@ headers = {"Ocp-Apim-Subscription-Key": API_KEY}
 
 # Define download parameters
 RES_factor = 3
-SPECIES_ID = 8          # Refer to `get_plot_simulation` docstring for species ID mapping
-SPECIES_CAT = 'Belt'    # Refer individual species in the web API to see specific category; such as 'Block' or 'Belt'
+SPECIES_ID = 7         # Refer to `get_plot_simulation` docstring for species ID mapping
+SPECIES_CAT = 'Water'    # Refer individual species in the web API to see specific category; such as 'Block' or 'Belt'
 
 # Get resfactored coords for downloading
 scrap_coords = get_downloading_coords(resfactor=RES_factor, include_region='LUTO')
