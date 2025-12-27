@@ -5,7 +5,7 @@ from joblib import Parallel, delayed
 from tqdm.auto import tqdm
 
 from tools.helpers.cache_manager import get_existing_downloads
-from tools import get_downloading_coords, get_plot_simulation
+from tools import get_downloading_coords, get_plot_simulation, get_species
 
 
 
@@ -24,8 +24,8 @@ headers = {"Ocp-Apim-Subscription-Key": API_KEY}
 
 # Define download parameters
 RES_factor = 3
-SPECIES_ID = 7         # Refer to `get_plot_simulation` docstring for species ID mapping
-SPECIES_CAT = 'Water'    # Refer individual species in the web API to see specific category; such as 'Block' or 'Belt'
+SPECIES_ID = 8         # Refer to `get_plot_simulation` docstring for species ID mapping
+SPECIES_CAT = 'Block'    # Refer individual species in the web API to see specific category; such as 'Block' or 'Belt'
 
 # Get resfactored coords for downloading
 scrap_coords = get_downloading_coords(resfactor=RES_factor, include_region='LUTO')
@@ -35,11 +35,10 @@ RES_factor_coords = scrap_coords.set_index(['x', 'y']).index.tolist()
 existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(SPECIES_ID, SPECIES_CAT)
 existing_dfs_set = set((x, y) for x, y in existing_dfs)
 
-# Filter coords while preserving row order from scrap_coords
-to_request_coords = [
-    (x, y) for x, y in zip(scrap_coords['x'], scrap_coords['y'])
-    if (x, y) not in existing_dfs_set
-]
+# Filter coords using vectorized pandas operations
+coords_tuples = scrap_coords[['x', 'y']].apply(tuple, axis=1)
+mask_coords = ~coords_tuples.isin(existing_dfs_set)
+to_request_coords = list(zip(scrap_coords.loc[mask_coords, 'x'], scrap_coords.loc[mask_coords, 'y']))
 
 
 
@@ -62,5 +61,24 @@ tasks = [
 for _ in tqdm(Parallel(n_jobs=32, return_as='generator_unordered', backend='threading')(tasks), total=len(tasks)):
     pass
 
+
+
+###########################################################
+#                    Get Species data                     #
+###########################################################
+# Vectorized filtering: convert existing_species to a set for O(1) lookup,
+# then use pandas isin() for vectorized membership check
+existing_species_set = set(existing_species)
+existing_species_df = scrap_coords[['x', 'y']].apply(tuple, axis=1)
+mask = ~existing_species_df.isin(existing_species_set)
+to_request_species = list(zip(scrap_coords.loc[mask, 'x'], scrap_coords.loc[mask, 'y']))
+
+tasks = [
+    delayed(get_species)(lon, lat)
+    for lon, lat in to_request_species
+]
+
+for _ in tqdm(Parallel(n_jobs=32, return_as='generator_unordered', backend='threading')(tasks), total=len(tasks)):
+    pass
 
 

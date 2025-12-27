@@ -243,9 +243,20 @@ def get_species_data(lon: float, lat: float, specId: int = 8) -> xr.DataArray:
     '''
     with open(f'downloaded/species_{lon}_{lat}_specId_{specId}.xml') as f:
         xml_string = f.read()
-        
+
     data_array = parse_species_data(xml_string).expand_dims(y=[lat], x=[lon])
-    
+
+    # Fast check for missing types (avoids loop overhead in common case)
+    existing_vars = data_array.data_vars
+    missing_types = {'Block', 'Belt'} - set(existing_vars)
+    if missing_types:
+        nan_template = xr.DataArray(
+            [np.nan, np.nan],
+            coords={'TYF_Type': ['tyf_G', 'tyf_r']},
+        )
+        for _type in missing_types:
+            data_array[_type] = nan_template
+
     return data_array
 
 

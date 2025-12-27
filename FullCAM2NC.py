@@ -102,7 +102,7 @@ def fetch_species_with_coords(lon, lat):
         return (lon, lat, species_template)
     
 tasks = [delayed(fetch_species_with_coords)(lon, lat) for lon, lat in species_coords]
-for lon, lat, data in tqdm(Parallel(n_jobs=16, return_as='generator_unordered')(tasks), total=len(tasks)):
+for lon, lat, data in tqdm(Parallel(n_jobs=32, return_as='generator_unordered')(tasks), total=len(tasks)):
     species_full.loc[dict(y=lat, x=lon)] = data.squeeze(['y', 'x'], drop=True)
     
     

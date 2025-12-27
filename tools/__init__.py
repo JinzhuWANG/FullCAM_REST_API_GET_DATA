@@ -318,7 +318,7 @@ def get_species(
             #   tyf_r is a representative value from TYFCategory element
             species_tree = etree.fromstring(response.content)
             
-            n_plnf = species_tree.xpath('//Event[@tEV="PlnF"]')
+            n_plnf = len(species_tree.xpath('//Event[@tEV="PlnF"]'))
             n_tyf_r = len(species_tree.xpath('.//TYFCategory'))
             if n_plnf != n_tyf_r:
                 if not is_last_attempt:
