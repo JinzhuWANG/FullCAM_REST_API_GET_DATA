@@ -388,6 +388,7 @@ def get_plot_simulation(
         Optional xarray Dataset for site data when using "Cache" mode.
     specId : int
         Species ID to load (default is 8 for Eucalyptus globulus).
+        Available species IDs can be found in the `SPECIES_MAP` dictionary.
     specCat : str
         Planting event type. Such as 'Block' or 'Belt' planting.
     url : str

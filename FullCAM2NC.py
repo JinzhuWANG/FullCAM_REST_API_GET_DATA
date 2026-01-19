@@ -19,9 +19,9 @@ from tools.XML2Data import (
 
 
 # Get variables
-RES_factor = 3
-SPECIES_ID = 8          # Eucalyptus globulus
-SPECIES_CAT = 'Block'   # Block or Belt; need to confirm with individual species
+RES_factor = 1
+SPECIES_ID = 7         # Eucalyptus globulus
+SPECIES_CAT = 'Water'   # Block or Belt; need to confirm with individual species
 existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(SPECIES_ID, SPECIES_CAT)
 
 
@@ -147,7 +147,7 @@ def fetch_carbon_with_coords(lon, lat):
         return (lon, lat, carbon_template)
     
 tasks = [delayed(fetch_carbon_with_coords)(lon, lat) for lon, lat in Carbon_coords]
-for lon, lat, data in tqdm(Parallel(n_jobs=32, return_as='generator_unordered')(tasks), total=len(tasks)):
+for lon, lat, data in tqdm(Parallel(n_jobs=-1, return_as='generator_unordered')(tasks), total=len(tasks)):
     carbon_full.loc[dict(y=lat, x=lon)] = data.squeeze(['y', 'x'], drop=True)
 
 

@@ -25,7 +25,7 @@ def fill_nan_nearest(data_2d:xr.DataArray) -> np.ndarray:
 ####################################################################################
 
 # Match spatial resolution and extent to template
-species_ds = xr.open_dataset('data/Species_TYF_R/specId_8_match_LUTO.nc').compute()
+species_ds = xr.open_dataset('data/processed/20251228_RES3_Species/species_RES.nc').compute()
 species_ds = species_ds.rio.write_crs("EPSG:4326")
 species_ds = species_ds.rio.set_spatial_dims(x_dim='x', y_dim='y')
 
