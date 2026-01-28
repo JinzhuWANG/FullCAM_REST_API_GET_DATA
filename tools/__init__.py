@@ -17,6 +17,7 @@ from io import StringIO
 from threading import Lock
 from collections import Counter
 from tools.XML2Data import parse_site_data, parse_init_data, parse_soil_data, parse_species_data
+from tools.parameter import SPECIES_MAP
 
 
 # Configuration
@@ -34,51 +35,6 @@ HEADERS = {
 _cache_write_lock = Lock()
 
 
-# Species id to name mapping
-SPECIES_MAP = {
-    0: "Acacia Forest and Woodlands",
-    1: "Acacia mangium",
-    2: "Acacia Open Woodland",
-    3: "Acacia Shrubland",
-    4: "Callitris Forest and Woodlands",
-    5: "Casuarina Forest and Woodland",
-    6: "Chenopod Shrub; Samphire Shrub and Forbland",
-    7: "Environmental plantings",
-    8: "Eucalyptus globulus",
-    9: "Eucalyptus grandis",
-    10: "Eucalyptus Low Open Forest",
-    11: "Eucalyptus nitens",
-    12: "Eucalyptus Open Forest",
-    13: "Eucalyptus Open Woodland",
-    14: "Eucalyptus Tall Open Forest",
-    15: "Eucalyptus urophylla or pellita",
-    16: "Eucalyptus Woodland",
-    17: "Heath",
-    22: "Low Closed Forest and Closed Shrublands",
-    23: "Mallee eucalypt species",
-    24: "Mallee Woodland and Shrubland",
-    25: "Mangrove",
-    27: "Melaleuca Forest and Woodland",
-    31: "Native species and revegetation <500mm rainfall",
-    32: "Native species and revegetation >=500mm rainfall",
-    33: "Native Species Regeneration <500mm rainfall",
-    34: "Native Species Regeneration >=500mm rainfall",
-    38: "Other acacia",
-    39: "Other eucalypts",
-    40: "Other Forests and Woodlands",
-    41: "Other non-eucalypts hardwoods",
-    42: "Other Shrublands",
-    43: "Other softwoods",
-    45: "Pinus hybrids",
-    46: "Pinus pinaster",
-    47: "Pinus radiata",
-    48: "Rainforest and vine thickets",
-    49: "Tropical Eucalyptus woodlands/grasslands",
-    51: "Unclassified Native vegetation",
-}
-
-
-
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -87,6 +43,18 @@ SPECIES_MAP = {
 def get_downloading_coords(resfactor:int=10, include_region:str='ALL') -> pd.DataFrame:
     '''
     Base on LUTO's spatial template (data/lumap.tif), get resfactored lon/lat coords.
+    
+    Parameters
+    ----------
+    resfactor : int
+        Resfactor to downsample the original 100m resolution data.
+        For example, resfactor=10 gives 1km resolution.
+    include_region : str
+        Region to include: 'ALL' for entire Australia, 'LUTO' for LUTO study area.
+        
+    Returns
+    -------
+        pd.DataFrame with 'x' and 'y' columns for lon/lat coordinates.
     '''
 
     # Get all lon/lat for Australia; the raster used is taken from the template of LUTO
@@ -371,7 +339,8 @@ def get_plot_simulation(
     headers:dict,  
     try_number:int=5, 
     timeout:int=60, 
-    download_records:str='downloaded/successful_downloads.txt'
+    download_records:str='downloaded/successful_downloads.txt',
+    download_csv_dir:str='downloaded'
 ):
     '''
     Run FullCAM plot simulation via REST API for given lon/lat and species ID.
@@ -401,6 +370,8 @@ def get_plot_simulation(
         Request timeout in seconds.
     download_records : str
         Path to the cache file for recording successful downloads.
+    download_csv_dir : str
+        Directory to save downloaded CSV files. Default is 'downloaded'.
         
     Returns
     -------
@@ -423,7 +394,7 @@ def get_plot_simulation(
             if response.status_code == 200:
                 f_name = f'df_{lon}_{lat}_specId_{specId}_specCat_{specCat}.csv'
                 response_df = pd.read_csv(StringIO(response.text))
-                response_df.to_csv(f'downloaded/{f_name}', index=False)
+                response_df.to_csv(f'{download_csv_dir}/{f_name}', index=False)
                 
                 # Add the record to cache file
                 with _cache_write_lock:
