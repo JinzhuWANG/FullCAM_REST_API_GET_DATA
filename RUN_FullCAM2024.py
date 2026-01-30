@@ -22,14 +22,18 @@ ENDPOINT = "/2024/fullcam-simulator/run-plotsimulation"
 url = f"{BASE_URL_SIM}{ENDPOINT}"
 headers = {"Ocp-Apim-Subscription-Key": API_KEY}
 
+
+
 # Define download parameters
-RES_factor = 1
-SPECIES_ID = 23         # Refer to `get_plot_simulation` docstring for species ID mapping
-SPECIES_CAT = 'BeltH'    # Refer individual species in the web API to see specific category; such as 'Block' or 'Belt'
+RES_factor = 1              # Resolution factor; 1 = 1km, 2 = 2km, etc.
+SPECIES_ID = 23             # Refer to `get_plot_simulation` docstring for species ID mapping
+SPECIES_CAT = 'BlockES'       # Refer individual species in the web API to see specific category; such as 'Block' or 'Belt'
 
 # Get resfactored coords for downloading
 scrap_coords = get_downloading_coords(resfactor=RES_factor, include_region='LUTO')
 RES_factor_coords = scrap_coords.set_index(['x', 'y']).index.tolist()
+
+
 
 # Load existing downloaded files from cache
 existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(SPECIES_ID, SPECIES_CAT)
@@ -62,6 +66,25 @@ for _ in tqdm(Parallel(n_jobs=32, return_as='generator_unordered', backend='thre
     pass
 
 
+# # ---------- Testing ----------
+# SPECIES_ID = 23             # Refer to `get_plot_simulation` docstring for species ID mapping
+# SPECIES_CAT = 'BeltHN'       # Refer individual species in the web API to see specific category; such as 'Block' or 'Belt'
+
+# siteInfo_fill = xr.open_dataset("data/data_assembled/siteinfo_cache.nc", chunks={})
+# species_fill = xr.open_dataset(f"data/Species_TYF_R/specId_{SPECIES_ID}_match_LUTO.nc", chunks={})
+
+
+# data_source = "Cache"
+# data_site = siteInfo_fill
+# data_species = species_fill
+# specId = SPECIES_ID
+# specCat = SPECIES_CAT
+# try_number:int=5
+# timeout:int=60
+
+# lon = 142.91
+# lat = -19.35
+# # --------------------------------
 
 ###########################################################
 #                    Get Species data                     #

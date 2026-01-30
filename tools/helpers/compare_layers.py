@@ -16,7 +16,7 @@ from tools.parameter import SPECIES_GEOMETRY
 
 
 # Get all coordinates for selected region and RES
-RES_factor = 3
+RES_factor = 1
 scrap_coords = get_downloading_coords(resfactor=RES_factor, include_region='LUTO')
 
 # Get coordinates for comparison
@@ -34,9 +34,21 @@ get_plot_simulation = partial(get_plot_simulation, download_csv_dir=download_csv
 
 # Set comparison year
 compare_year = 2100
-SPECIES_ID = 8
-SPECIES_CAT = 'Belt'
+SPECIES_ID = 7
+SPECIES_CAT = 'BlockES'
 
+# Set the species to previous v2016 naming convention
+if SPECIES_ID == 7:
+    SPECIES_v2016_NAME = 'CP'
+elif SPECIES_ID == 8:
+    SPECIES_v2016_NAME = 'EP'
+
+if 'block' in SPECIES_CAT.lower():
+    SPECIES_v2016_CAT = 'BLOCK' 
+elif 'belt' in SPECIES_CAT.lower():
+    SPECIES_v2016_CAT = 'BELT' 
+elif 'water' in SPECIES_CAT.lower():
+    SPECIES_v2016_CAT = 'RIP' 
 
 
 ################################################################
@@ -68,12 +80,13 @@ for specId, specCats in SPECIES_GEOMETRY.items():
 
 
 
+
 ################################################################
 #                Get Cache simulation data                     #
 ################################################################
 
 # Get FullCAM Cached data
-fullcam_cache_data = "data/processed/20260101_RES1_CP_Block/carbonstock_RES_1.nc"
+fullcam_cache_data = f"data/processed/Output_GeoTIFFs/carbonstock_RES_{RES_factor}_specId_{SPECIES_ID}_specCat_{SPECIES_CAT}.nc"
 ds_cache = xr.open_dataset(fullcam_cache_data, chunks={})['data'].sel(YEAR=compare_year, drop=True).compute() 
 
 
@@ -85,21 +98,31 @@ ds_cache = xr.open_dataset(fullcam_cache_data, chunks={})['data'].sel(YEAR=compa
 C_CO2_ratio = 12 / 44  # To convert from CO2 to C
 
 # Get v2016 Cached data; band 91 is carbon in 2100
+if SPECIES_v2016_NAME == 'CP':
+    Debries_C = rxr.open_rasterio(v2016_path / f'{SPECIES_v2016_NAME}_{SPECIES_v2016_CAT}_TREES_T_CO2_HA.tif', masked=True, chunks={}) * C_CO2_ratio
+    Trees_C = rxr.open_rasterio(v2016_path   / f'{SPECIES_v2016_NAME}_{SPECIES_v2016_CAT}_DEBRIS_T_CO2_HA.tif', masked=True, chunks={}) * C_CO2_ratio
+    Soil_C = rxr.open_rasterio(v2016_path    / f'{SPECIES_v2016_NAME}_{SPECIES_v2016_CAT}_SOIL_T_CO2_HA.tif', masked=True, chunks={}) * C_CO2_ratio
+elif SPECIES_v2016_NAME == 'EP':
+    Trees_C = rxr.open_rasterio(v2016_path   / f'{SPECIES_v2016_NAME}_{SPECIES_v2016_CAT}_TREES_TOT_T_CO2_HA.tif', masked=True, chunks={}) * C_CO2_ratio
+    Debries_C = rxr.open_rasterio(v2016_path / f'{SPECIES_v2016_NAME}_{SPECIES_v2016_CAT}_DEBRIS_TOT_T_CO2_HA.tif', masked=True, chunks={}) * C_CO2_ratio
+    Soil_C = rxr.open_rasterio(v2016_path    / f'{SPECIES_v2016_NAME}_{SPECIES_v2016_CAT}_SOIL_TOT_T_CO2_HA.tif', masked=True, chunks={}) * C_CO2_ratio
 
-Debries_C = rxr.open_rasterio(v2016_path / 'CP_BLOCK_TREES_T_CO2_HA.tif', masked=True, chunks={}) * C_CO2_ratio
-Trees_C = rxr.open_rasterio(v2016_path   / 'CP_BLOCK_DEBRIS_T_CO2_HA.tif', masked=True, chunks={}) * C_CO2_ratio
-Soil_C = rxr.open_rasterio(v2016_path    / 'CP_BLOCK_SOIL_T_CO2_HA.tif', masked=True, chunks={}) * C_CO2_ratio
+# Select only year 2100 (band 91)
+Debries_C_sel = Debries_C.sel(band=91, drop=True).compute()
+Trees_C_sel = Trees_C.sel(band=91, drop=True).compute()
+Soil_C_sel = Soil_C.sel(band=91, drop=True).compute()
 
+# Combine v2016 data into a single DataArray
 ds_v2016 = xr.DataArray(
-    data = np.stack([Trees_C.data, Debries_C.data, Soil_C.data], axis=0),
-    dims = ['VARIABLE', 'band', 'y', 'x'],
+    data = np.stack([Debries_C_sel.data, Trees_C_sel.data, Soil_C_sel.data], axis=0),
+    dims = ['VARIABLE', 'y', 'x'],
     coords = {
         'VARIABLE': ['TREE_C_HA', 'DEBRIS_C_HA', 'SOIL_C_HA'],
-        'band': range(2010, 2101),
-        'y': Trees_C.y,
-        'x': Trees_C.x,
+        'y': Trees_C_sel.y,
+        'x': Soil_C_sel.x,
     }
-).rename({'band':'Year'}).sel(Year=compare_year, drop=True).compute()
+)
+
 
 
 
@@ -107,11 +130,10 @@ ds_v2016 = xr.DataArray(
 #                       API v.s Cached                         #
 ################################################################
 
-
 csv_files = [i for i in glob(f'{download_csv_dir}/*.csv') if f'specId_{SPECIES_ID}_specCat_{SPECIES_CAT}' in i]
 
 df_comparison = pd.DataFrame()
-for f in tqdm(glob(f'{download_csv_dir}/*.csv')):
+for f in tqdm(csv_files):
     # Get API data
     df_api = pd.read_csv(f)[['Year', 'C mass of plants  (tC/ha)', 'C mass of debris  (tC/ha)', 'C mass of soil  (tC/ha)']]
     df_api = df_api.rename(columns={
@@ -135,6 +157,7 @@ for f in tqdm(glob(f'{download_csv_dir}/*.csv')):
     
     
     df_combine = df_api.merge(df_cache, on=['VARIABLE']).merge(df_v2016, on=['VARIABLE'])
+    df_combine[['lon', 'lat']] = lon, lat
     df_comparison = pd.concat([df_comparison, df_combine], ignore_index=True)
 
 
@@ -143,7 +166,7 @@ for f in tqdm(glob(f'{download_csv_dir}/*.csv')):
 p9.options.figure_size = (10, 6)
 p9.options.dpi = 100
 
-fig = (
+fig1 = (
     p9.ggplot(df_comparison)
     + p9.geom_point(
         p9.aes(x='data_api', y='data_cache'), size=0.5, alpha=0.3
@@ -157,6 +180,8 @@ fig = (
     )
 )
 
+fig1.save(comparison_dir/f'{SPECIES_v2016_NAME}_{SPECIES_CAT}_API_V.S_Cache_Year_{compare_year}.png', dpi=300)
+
 # Cache simulation v.s v2016
 fig2 = (
     p9.ggplot(df_comparison)
@@ -167,10 +192,11 @@ fig2 = (
     + p9.geom_abline(slope=1, intercept=0, color='red', linetype='dashed')
     + p9.labs(
         title=f'Carbon Comparison at Year {compare_year} (Cache vs v2016)',
-        x='Carbon from Cache (tC/ha)',
-        y='Carbon from v2016 (tC/ha)',
+        x='FullCam v2024 (tC/ha)',
+        y='FullCam v2016 (tC/ha)',
     )
 )
+fig2.save(comparison_dir/f'{SPECIES_v2016_NAME}_{SPECIES_CAT}_New_V.S_Old_Year_{compare_year}.png', dpi=300)
 
 
 ################################################################
@@ -185,4 +211,4 @@ diff_ratio.rio.write_crs(Debries_C.rio.crs, inplace=True)
 diff_ratio.rio.write_transform(Debries_C.rio.transform(), inplace=True)
 
 for var in diff_ratio['VARIABLE'].values:
-    diff_ratio.sel(VARIABLE=var).rio.to_raster(comparison_dir/f'Cache_simulation_over_V2016_diff_ratio_{var}_{compare_year}.tif', compress='LZW')
+    diff_ratio.sel(VARIABLE=var).rio.to_raster(comparison_dir/f'{SPECIES_v2016_NAME}_{var}_New_V.S_Old_ratio_{compare_year}.tif', compress='LZW')

@@ -114,21 +114,21 @@ So we create dataset with constant TYF parameters based on the following values:
 <TYFParameters count="5" idSP="23">
     <TYFCategory tTYFCat="Custom" tyf_G="10" tyf_r="1"/>
     <TYFCategory tTYFCat="BeltH" tyf_G="3.492" tyf_r="1.2"/>
+    <TYFCategory tTYFCat="BeltHN" tyf_G="2.288" tyf_r="1.608"/>
+    <TYFCategory tTYFCat="BeltHW" tyf_G="3.492" tyf_r="1.2"/>
     <TYFCategory tTYFCat="BeltL" tyf_G="4.533" tyf_r="1.2"/>
     <TYFCategory tTYFCat="BlockES" tyf_G="6.317" tyf_r="1.0"/>
-    <TYFCategory tTYFCat="BeltHW" tyf_G="3.492" tyf_r="1.2"/>
-    <TYFCategory tTYFCat="BeltHN" tyf_G="2.288" tyf_r="1.608"/>
 </TYFParameters>
 
 '''
 
 species_Mallee = xr.Dataset(
     {
-        'BeltH': xr.DataArray([spatial_template * 3.492, spatial_template * 1.2], dims=['TYF_Type', 'y', 'x'], coords={'TYF_Type': ['tyf_G', 'tyf_r']}),
         'BeltL': xr.DataArray([spatial_template * 4.533, spatial_template * 1.2], dims=['TYF_Type', 'y', 'x'], coords={'TYF_Type': ['tyf_G', 'tyf_r']}),
-        'BlockES': xr.DataArray([spatial_template * 6.317, spatial_template * 1.0], dims=['TYF_Type', 'y', 'x'], coords={'TYF_Type': ['tyf_G', 'tyf_r']}),
+        'BeltH': xr.DataArray([spatial_template * 3.492, spatial_template * 1.2], dims=['TYF_Type', 'y', 'x'], coords={'TYF_Type': ['tyf_G', 'tyf_r']}),
         'BeltHW': xr.DataArray([spatial_template * 3.492, spatial_template * 1.2], dims=['TYF_Type', 'y', 'x'], coords={'TYF_Type': ['tyf_G', 'tyf_r']}),
         'BeltHN': xr.DataArray([spatial_template * 2.288, spatial_template * 1.608], dims=['TYF_Type', 'y', 'x'], coords={'TYF_Type': ['tyf_G', 'tyf_r']}),
+        'BlockES': xr.DataArray([spatial_template * 6.317, spatial_template * 1.0], dims=['TYF_Type', 'y', 'x'], coords={'TYF_Type': ['tyf_G', 'tyf_r']}),
     }
 ).assign_coords({'x': spatial_template['x'], 'y': spatial_template['y']})
 
