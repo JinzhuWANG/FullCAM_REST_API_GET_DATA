@@ -1,11 +1,18 @@
+
+import re
 import numpy as np
+import pandas as pd
 import xarray as xr
 import rioxarray as rxr
+import plotnine as p9
+
+from glob import glob
+from tqdm.auto import tqdm
 
 from rasterio.enums import Resampling
 from scipy.ndimage import distance_transform_edt
 from tools.FullCAM2020_to_NetCDF import export_to_geotiff_with_band_names
-
+from tools.XML2Data import parse_species_data
 
 # Read spatial template
 spatial_template = rxr.open_rasterio('data/lumap.tif', masked=True).sel(band=1, drop=True).compute()
@@ -65,6 +72,66 @@ for var in species_reprojected.data_vars:
             f'data/Species_TYF_R/specId_8_{var}_{TYF_Type}.tif',
             band_dim='YEAR'
         )
+      
+      
+        
+# ---------------------------- Plot comparison -------------------------------------
+
+# Load original TYR R data
+TYF_specID_8 = xr.open_dataset(f'data/Species_TYF_R/specId_8_match_LUTO.nc').compute()
+
+
+# Get downloaded carbon data CSV files; does not matter which species because SiteInfo is the same for all species
+FullCAM_retrive_dir ='data/processed/Compare_API_and_Assemble_Data_Simulations/download_csv'
+csv_files = [i for i in glob(f'{FullCAM_retrive_dir}/*.csv') if f'specId_8_specCat_Block' in i]
+
+data_compare = pd.DataFrame()
+for f in tqdm(csv_files):
+    # Get Cache data
+    #   The SiteInfo data for the FullCAM carbon df at lon/lat already downloaded
+    lon, lat  = re.findall(r'df_(-?\d+\.\d+)_(-?\d+\.\d+)_specId_', os.path.basename(f))[0]
+    with open(f'downloaded/species_{lon}_{lat}_specId_8.xml', 'r') as file:
+        FullCAM_soil = parse_species_data(file.read())
+        FullCAM_soil = FullCAM_soil.to_dataframe().reset_index()
+        FullCAM_soil = FullCAM_soil.melt(id_vars=['TYF_Type'], value_vars=['Block', 'Belt'], var_name='Geometry', value_name='Value')
+    # Get TYF data from reprojected dataset at the lon/lat
+    TYF_specID_8_pt = (
+        TYF_specID_8
+        .sel(x=float(lon), y=float(lat), method='nearest')
+        .to_dataframe()
+        .reset_index()
+        .melt(id_vars=['TYF_Type'], value_vars=['Block', 'Belt'], var_name='Geometry', value_name='Value')
+    )
+    # Merge FullCAM and reprojected TYF data, then append to main dataframe
+    TYF_merged = pd.merge(
+        FullCAM_soil,
+        TYF_specID_8_pt,
+        on=['TYF_Type', 'Geometry'],
+        suffixes=('_FullCAM', '_v2020')
+    )
+    TYF_merged[['x', 'y']] = float(lon), float(lat)
+    data_compare = pd.concat([data_compare, TYF_merged], ignore_index=True)
+    
+# Plot comparison
+p9.options.figure_size = (6, 6)
+p9.options.dpi = 150
+
+fig = (
+    p9.ggplot(data_compare)
+    + p9.aes(x='Value_v2020', y='Value_FullCAM')
+    + p9.geom_point(alpha=0.3, size=0.5)
+    + p9.geom_abline(slope=1, intercept=0, linetype='dashed', color='red')
+    + p9.facet_grid('Geometry ~ TYF_Type')
+    + p9.theme_bw()
+    + p9.labs(
+        title='TYF Parameter Comparison for Eucalyptus globulus (specId=8)',
+        x='TYF Parameter v2020',
+        y='TYF Parameter FullCAM'
+    )
+)
+
+fig.save('data/processed/Compare_API_and_Assemble_Data_Simulations/Data_compare_Species_TYF_R_specId_8.svg', dpi=150)
+    
 
 
 ####################################################################################
@@ -113,7 +180,7 @@ So we create dataset with constant TYF parameters based on the following values:
 
 <TYFParameters count="5" idSP="23">
     <TYFCategory tTYFCat="Custom" tyf_G="10" tyf_r="1"/>
-    <TYFCategory tTYFCat="BeltH" tyf_G="3.492" tyf_r="1.2"/>
+    <TYFCategory tTYFCat="BeltH" tyf_G="3.492" tyf_r="1.2"/>    # "BeltH" is the same as "BeltHW"; "BeltH" is not shown in the species PLO file from FullCAM
     <TYFCategory tTYFCat="BeltHN" tyf_G="2.288" tyf_r="1.608"/>
     <TYFCategory tTYFCat="BeltHW" tyf_G="3.492" tyf_r="1.2"/>
     <TYFCategory tTYFCat="BeltL" tyf_G="4.533" tyf_r="1.2"/>

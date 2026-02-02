@@ -286,15 +286,7 @@ def get_species(
             #   tyf_r is a representative value from TYFCategory element
             species_tree = etree.fromstring(response.content)
             
-            n_plnf = len(species_tree.xpath('//Event[@tEV="PlnF"]'))
-            n_tyf_r = len(species_tree.xpath('.//TYFCategory'))
-            if n_plnf != n_tyf_r:
-                if not is_last_attempt:
-                    time.sleep(2**attempt)
-                continue
-            
-            tyf_category = species_tree.xpath('.//TYFCategory')[0]
-            tyf_r = tyf_category.get('tyf_r')
+            tyf_r = species_tree.xpath('.//TYFCategory')[0].get('tyf_r')
 
             tyf_r_counter[tyf_r] += 1
             tyf_r_map[tyf_r] = response.content
@@ -764,7 +756,8 @@ def create_species_section(
         with open(file_path, 'r', encoding='utf-8') as f:
             parsed_data = parse_species_data(f.read())
     elif data_source == "Cache":    # Cache Data Mode: Load from local cache (xarray dataset)
-        parsed_data = data_species.sel(x=lon, y=lat, method='nearest', drop=True).drop_vars('spatial_ref').compute()
+        parsed_data = data_species.sel(x=lon, y=lat, method='nearest', drop=True).compute()
+        parsed_data = parsed_data.drop_vars('spatial_ref')
         
     # Load the species XML file
     holder_path = f'data/dataholder_SpeciesForest_specId_{specId}.xml'

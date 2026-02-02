@@ -66,42 +66,29 @@ for _ in tqdm(Parallel(n_jobs=32, return_as='generator_unordered', backend='thre
     pass
 
 
-# # ---------- Testing ----------
-# SPECIES_ID = 23             # Refer to `get_plot_simulation` docstring for species ID mapping
-# SPECIES_CAT = 'BeltHN'       # Refer individual species in the web API to see specific category; such as 'Block' or 'Belt'
-
-# siteInfo_fill = xr.open_dataset("data/data_assembled/siteinfo_cache.nc", chunks={})
-# species_fill = xr.open_dataset(f"data/Species_TYF_R/specId_{SPECIES_ID}_match_LUTO.nc", chunks={})
 
 
-# data_source = "Cache"
-# data_site = siteInfo_fill
-# data_species = species_fill
-# specId = SPECIES_ID
-# specCat = SPECIES_CAT
-# try_number:int=5
-# timeout:int=60
+# ---------- Testing ----------
 
-# lon = 142.91
-# lat = -19.35
-# # --------------------------------
+lon = 147.5
+lat = -37.5
 
-###########################################################
-#                    Get Species data                     #
-###########################################################
-# Vectorized filtering: convert existing_species to a set for O(1) lookup,
-# then use pandas isin() for vectorized membership check
-existing_species_set = set(existing_species)
-existing_species_df = scrap_coords[['x', 'y']].apply(tuple, axis=1)
-mask = ~existing_species_df.isin(existing_species_set)
-to_request_species = list(zip(scrap_coords.loc[mask, 'x'], scrap_coords.loc[mask, 'y']))
+specId = 8
+specCat = 'Block' 
 
-tasks = [
-    delayed(get_species)(lon, lat)
-    for lon, lat in to_request_species
-]
+try_number:int=5
+timeout:int=60
 
-for _ in tqdm(Parallel(n_jobs=32, return_as='generator_unordered', backend='threading')(tasks), total=len(tasks)):
-    pass
+# Test Cache data retrieval
+data_source = "Cache"
+data_site = xr.open_dataset("data/data_assembled/siteinfo_cache.nc", chunks={})
+data_species = xr.open_dataset(f"data/Species_TYF_R/specId_{specId}_match_LUTO.nc", chunks={})
+
+# Test API data retrieval
+data_source = "API"
+data_site = None
+data_species = None
+
+
 
 

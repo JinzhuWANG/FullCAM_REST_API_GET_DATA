@@ -1,11 +1,19 @@
+
 import io
+import os
+import re
 import zipfile
-import numpy as np
-import xarray as xr
+import pandas as pd
 import rioxarray as rio
+import xarray as xr
+import numpy as np
 import plotnine as p9
 
+from glob import glob
+from tqdm.auto import tqdm
+
 from tools import get_downloading_coords
+from tools.XML2Data import parse_site_data
 from tools.helpers.cache_manager import get_existing_downloads
 
 
@@ -37,45 +45,50 @@ maxAbgMF_data.to_netcdf('data/maxAbgMF/maxAbgMF.nc', encoding={'data': {'zlib': 
 
 
 # -------------------------------- Plot comparison -------------------------------- 
-maxAbgMF_restfull = (
-    xr.open_dataset('data/processed/siteinfo_RES.nc')['maxAbgMF']
-    .compute()
-    .sel(x=res_coords_x, y=res_coords_y)
-)
+
+# Load  maxAbgMF from DCCEEW
+maxAbgMF_DCCEEW = xr.load_dataset('data/maxAbgMF/maxAbgMF.nc')['data']
 
 
-maxAbgMF_downloaded = maxAbgMF_data.sel(
-    x=res_coords_x, 
-    y=res_coords_y, 
-    method='nearest'
-).compute()
+# Get downloaded carbon data CSV files; does not matter which species because SiteInfo is the same for all species
+FullCAM_retrive_dir ='data/processed/Compare_API_and_Assemble_Data_Simulations/download_csv'
+csv_files = [i for i in glob(f'{FullCAM_retrive_dir}/*.csv') if f'specId_8_specCat_Block' in i]
 
+data_compare = pd.DataFrame()
+for f in tqdm(csv_files):
+    # Get Cache data
+    #   The SiteInfo data for the FullCAM carbon df at lon/lat already downloaded
+    lon, lat  = re.findall(r'df_(-?\d+\.\d+)_(-?\d+\.\d+)_specId_', os.path.basename(f))[0]
+    with open(f'downloaded/siteInfo_{lon}_{lat}.xml', 'r') as file:
+        FullCAM_siteinfo = parse_site_data(file.read())['maxAbgMF']
+        FullCAM_siteinfo = FullCAM_siteinfo.data.item()
+    # Get maxAbgMF from DCCEEW at the lon/lat
+    maxAbgMF_pt = maxAbgMF_DCCEEW.sel(x=float(lon), y=float(lat), method='nearest').data.item()
+    # Merge FullCAM and DCCEEW maxAbgMF data, then append to main dataframe
+    maxAbgMF_merged = pd.DataFrame({
+        'maxAbgMF_FullCAM': [FullCAM_siteinfo],
+        'maxAbgMF_DCCEEW': [maxAbgMF_pt],
+        'x': [float(lon)],
+        'y': [float(lat)],
+    })
+    data_compare = pd.concat([data_compare, maxAbgMF_merged], ignore_index=True)
+    
 
-plot_data = (
-    xr.concat([maxAbgMF_restfull, maxAbgMF_downloaded], dim='source', join ='inner')
-    .assign_coords(source=['FullCAM', 'Downloaded'])
-    .to_dataframe()
-    .reset_index()
-    .round({'x':3, 'y':3})
-    .pivot(index=['x', 'y'], columns=['source'], values='maxAbgMF')
-    .reset_index()
-    .dropna()
-)
+# Plot comparison
+p9.options.figure_size = (6, 6)
+p9.options.dpi = 150
 
 fig = (
-    p9.ggplot()
-    + p9.aes(x=plot_data[::100]['FullCAM'], y=plot_data[::100]['Downloaded'])
+    p9.ggplot(data_compare)
+    + p9.aes(x='maxAbgMF_FullCAM', y='maxAbgMF_DCCEEW')
     + p9.geom_point(alpha=0.3, size=0.5)
     + p9.geom_abline(slope=1, intercept=0, linetype='dashed', color='red')
     + p9.theme_bw()
     + p9.labs(
-        title='Forest Productivity Index (FPI) Comparison: FullCAM vs SoilLandscape',
-        x='FPI from FullCAM',
-        y='FPI from Downloaded'
+        title='Maximum Above Ground Mass Factor Comparison',
+        x='maxAbgMF FullCAM',
+        y='maxAbgMF DCCEEW'
     )
 )
 
-
-
-
-
+fig.save('data/processed/Compare_API_and_Assemble_Data_Simulations/Data_compare_SiteInfo_maxAbgMF.svg', dpi=150)

@@ -1,3 +1,6 @@
+
+import os
+import re
 import requests
 import io
 import numpy as np
@@ -11,9 +14,9 @@ from tqdm.auto import tqdm
 from lxml import etree
 from joblib import Parallel, delayed
 from tqdm.auto import tqdm
+from glob import glob
 
-from tools import get_downloading_coords
-from tools.helpers.cache_manager import get_existing_downloads
+from tools.XML2Data import parse_site_data
 
 
 
@@ -233,118 +236,92 @@ combined_ds.to_netcdf(
 #                        Compare ANUClim data with FullCAM                           #
 ######################################################################################
 
-# Get resfactored coords for downloading
-SPECIES_ID = 8          # Eucalyptus globulus
-SPECIES_CAT = 'Block'   # Block or Belt; need to confirm with individual species
-scrap_coords = get_downloading_coords(resfactor=10).set_index(['x', 'y']).index.tolist()
-existing_siteinfo, existing_species, existing_dfs = get_existing_downloads(SPECIES_ID, SPECIES_CAT)
-
-res_coords = set(existing_siteinfo).intersection(set(scrap_coords))
-res_coords_x = xr.DataArray([coord[0] for coord in res_coords], dims=['cell'])
-res_coords_y = xr.DataArray([coord[1] for coord in res_coords], dims=['cell'])
+# Load processed ANUClim data
+data_ANUClim = xr.load_dataset("data/ANUClim/processed/ANUClim_to_FullCAM.nc")
 
 
+# Get downloaded carbon data CSV files; does not matter which species because SiteInfo is the same for all species
+FullCAM_retrive_dir ='data/processed/Compare_API_and_Assemble_Data_Simulations/download_csv'
+csv_files = [i for i in glob(f'{FullCAM_retrive_dir}/*.csv') if f'specId_8_specCat_Block' in i]
+data_FullCam = pd.DataFrame()
 
-# --------------- Load ANUClim Data ---------------
+data_compare = pd.DataFrame()
+for f in tqdm(csv_files):
+    # Get Cache data
+    #   The SiteInfo data for the FullCAM carbon df at lon/lat already downloaded
+    lon, lat  = re.findall(r'df_(-?\d+\.\d+)_(-?\d+\.\d+)_specId_', os.path.basename(f))[0]
+    with open(f'downloaded/siteInfo_{lon}_{lat}.xml', 'r') as file:
+        FullCAM_siteinfo = parse_site_data(file.read())[['avgAirTemp', 'openPanEvap', 'rainfall']]
+        FullCAM_siteinfo = FullCAM_siteinfo.to_dataframe().reset_index()
+        FullCAM_siteinfo[['x', 'y']] = float(lon), float(lat)
+    # Get ANUClim data at the lon/lat
+    ANUClim_pt = (
+        data_ANUClim
+        .sel(x=float(lon), y=float(lat), method='nearest')
+        .to_dataframe()
+        .reset_index()
+    )
+    ANUClim_pt[['x', 'y']] = float(lon), float(lat)
+    # Merge FullCAM and ANUClim data, then append to main dataframe
+    merged = pd.merge(
+        FullCAM_siteinfo,
+        ANUClim_pt,
+        on=['year', 'month', 'x', 'y'],
+        suffixes=('_FullCAM', '_ANUClim')
+    )
+    data_compare = pd.concat([data_compare, merged], ignore_index=True)
+       
+        
 
-data_FullCam = (
-    xr.open_dataset('data/processed/siteinfo_RES.nc')
-    .compute()
-    .sel(x=res_coords_x, y=res_coords_y)
-)
-
-data_ANUClim = (
-    xr.open_dataset("data/ANUClim/processed/ANUClim_to_FullCAM.nc")
-    .compute()
-    .sel(x=res_coords_x,  y=res_coords_y, method='nearest') 
-)
-
+# ------- Plot comparisons -------
+p9.options.figure_size = (6, 6)
+p9.options.dpi = 150
 
 
 # openPanEvap
-evap_FullCAM = data_FullCam['openPanEvap'].to_dataframe().reset_index()
-evap_downloaded = data_ANUClim['openPanEvap'].to_dataframe().reset_index()
-
-plot_data = (
-    pd.merge(
-        evap_FullCAM,
-        evap_downloaded,
-        on=['cell', 'year', 'month'],
-        suffixes=('_FullCAM', '_Downloaded')
-    )
-    .round({'x':3, 'y':3})
-    .dropna()
-)
-
-
-fig = (
-    p9.ggplot(plot_data[::1000], p9.aes(x='openPanEvap_FullCAM', y='openPanEvap_Downloaded'))
-    + p9.geom_point(alpha=0.3)
+fig_1 = (
+    p9.ggplot(data_compare.sample(2000))
+    + p9.geom_point( p9.aes(x='openPanEvap_FullCAM', y='openPanEvap_ANUClim'), alpha=0.3)
     + p9.geom_abline(slope=1, intercept=0, color='red', linetype='dashed')
     + p9.labs(
-        title='ANUClim Data Download vs FullCAM Data',
-        x='FullCAM openPanEvap (mm/month)',
-        y='Downloaded openPanEvap (mm/month)'
+        title='openPanEvap (ANUClim vs FullCAM)',
+        x='openPanEvap FullCAM (mm/month)',
+        y='openPanEvap ANUClim (mm/month)'
     )
     + p9.theme_bw()
 )
+
+fig_1.save('data/processed/Compare_API_and_Assemble_Data_Simulations/Data_compare_SiteInfo_openPanEvap.svg', dpi=150)
 
 
 # rainfull
-rain_FullCAM = data_FullCam['rainfall'].to_dataframe().reset_index()
-rain_downloaded = data_ANUClim['rainfall'].to_dataframe().reset_index()
-
-plot_data = (
-    pd.merge(
-        rain_FullCAM,
-        rain_downloaded,
-        on=['cell', 'year', 'month'],
-        suffixes=('_FullCAM', '_Downloaded')
-    )
-    .round({'x':3, 'y':3})
-    .dropna()
-)
-
-fig = (
-    p9.ggplot(plot_data[::1000], p9.aes(x='rainfall_FullCAM', y='rainfall_Downloaded'))
-    + p9.geom_point(alpha=0.3)
+fig_2 = (
+    p9.ggplot(data_compare.sample(2000))
+    + p9.geom_point( p9.aes(x='rainfall_FullCAM', y='rainfall_ANUClim'), alpha=0.3)
     + p9.geom_abline(slope=1, intercept=0, color='red', linetype='dashed')
     + p9.labs(
-        title='ANUClim Data Download vs FullCAM Data',
-        x='FullCAM rainfall (mm/month)',
-        y='Downloaded rainfall (mm/month)'
+        title='rainfall (ANUClim vs FullCAM)',
+        x='rainfall FullCAM (mm/month)',
+        y='rainfall ANUClim (mm/month)'
     )
     + p9.theme_bw()
 )
+fig_2.save('data/processed/Compare_API_and_Assemble_Data_Simulations/Data_compare_SiteInfo_rainfall.svg', dpi=150)
 
 
 # avgAirTemp
-tavg_FullCAM = data_FullCam['avgAirTemp'].to_dataframe().reset_index()
-tavg_downloaded = data_ANUClim['avgAirTemp'].to_dataframe().reset_index()  
-
-plot_data = (
-    pd.merge(
-        tavg_FullCAM,
-        tavg_downloaded,
-        on=['cell', 'year', 'month'],
-        suffixes=('_FullCAM', '_Downloaded')
-    )
-    .round({'x':3, 'y':3})
-    .dropna()
-)
-
-fig = (
-    p9.ggplot(plot_data[::1000], p9.aes(x='avgAirTemp_FullCAM', y='avgAirTemp_Downloaded'))
-    + p9.geom_point(alpha=0.3)
+fig_3 = (
+    p9.ggplot(data_compare.sample(2000))
+    + p9.geom_point( p9.aes(x='avgAirTemp_FullCAM', y='avgAirTemp_ANUClim'), alpha=0.3)
     + p9.geom_abline(slope=1, intercept=0, color='red', linetype='dashed')
     + p9.labs(
-        title='ANUClim Data Download vs FullCAM Data',
-        x='FullCAM avgAirTemp (°C)',
-        y='Downloaded avgAirTemp (°C)'
+        title='avgAirTemp (ANUClim vs FullCAM)',
+        x='avgAirTemp FullCAM (°C)',
+        y='avgAirTemp ANUClim (°C)'
     )
     + p9.theme_bw()
 )
-
+fig_3.save('data/processed/Compare_API_and_Assemble_Data_Simulations/Data_compare_SiteInfo_avgAirTemp.svg', dpi=150)
 
 
 

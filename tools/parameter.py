@@ -1,9 +1,9 @@
 
 
 SPECIES_GEOMETRY = {
-    7:  ['BeltH', 'BlockES', 'Water'],                  # 'BeltL' is excluded because LUTO not considering low density belts
+    7:  ['BeltH', 'BlockES', 'Water'],        # 'BeltL' is excluded because LUTO not considering low density belts
     8:  ['Belt', 'Block'],
-    23: ['BeltHN', 'BeltHW', 'BlockES'],                # 'BeltL' is excluded because LUTO not considering low density belts
+    23: ['BeltHW', 'BlockES'],                # 'BeltL' is excluded; 'BeltHW' is the same as 'BeltH' for Mallee species
 }
 '''
 This dictionary maps SPECIES_ID to a list of valid SPECIES_CAT values.

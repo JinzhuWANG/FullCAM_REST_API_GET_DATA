@@ -1,6 +1,7 @@
 import os, re
 import rioxarray as rio
 import numpy as np
+import pandas as pd
 import xarray as xr
 import plotnine as p9
 
@@ -11,6 +12,7 @@ from rioxarray import merge as rio_merge
 
 from tools import get_downloading_coords
 from tools.helpers.cache_manager import get_existing_downloads
+from tools.XML2Data import parse_site_data
 
 
 # Config
@@ -70,39 +72,59 @@ FPI_all_years.to_netcdf('data/FPI_lys/FPI_lyrs.nc', encoding={'data': {'zlib': T
 
 
 # ------------------ Plot RESTful vs SoilLandscape Clay Comparison ------------------
-FPI_restfull = (
-    xr.open_dataset('data/processed/siteinfo_RES.nc')['forestProdIx']
-    .compute()
-    .sel(x=res_coords_x, y=res_coords_y)
-)
 
-FPI_SoilLandscape = (
-    xr.open_dataset('data/FPI_lys/FPI_lyrs.nc')['data']
-    .compute()
-    .sel(x=res_coords_x, y=res_coords_y, method='nearest')
-    .assign_coords(x=res_coords_x, y=res_coords_y)
-)
+# Get FPI data from DCCEEW 
+FPI_DCCEEW = xr.load_dataset('data/FPI_lys/FPI_lyrs.nc')['data']
 
-plot_data = (
-    xr.concat([FPI_restfull, FPI_SoilLandscape], dim='source', join ='inner')
-    .assign_coords(source=['RESTful', 'FPI_SoilLandscape'])
-    .to_dataframe()
-    .reset_index()
-    .round({'x':3, 'y':3})
-    .pivot(index=['year','x', 'y'], columns=['source'], values='forestProdIx')
-    .reset_index()
-    .dropna()
-)
+
+# Get downloaded carbon data CSV files; does not matter which species because SiteInfo is the same for all species
+FullCAM_retrive_dir ='data/processed/Compare_API_and_Assemble_Data_Simulations/download_csv'
+csv_files = [i for i in glob(f'{FullCAM_retrive_dir}/*.csv') if f'specId_8_specCat_Block' in i]
+
+data_compare = pd.DataFrame()
+for f in tqdm(csv_files):
+    # Get Cache data
+    #   The SiteInfo data for the FullCAM carbon df at lon/lat already downloaded
+    lon, lat  = re.findall(r'df_(-?\d+\.\d+)_(-?\d+\.\d+)_specId_', os.path.basename(f))[0]
+    with open(f'downloaded/siteInfo_{lon}_{lat}.xml', 'r') as file:
+        FullCAM_siteinfo = parse_site_data(file.read())['forestProdIx']
+        FullCAM_siteinfo = FullCAM_siteinfo.to_dataframe().reset_index()
+        FullCAM_siteinfo[['x', 'y']] = float(lon), float(lat)
+    # Get FPI from DCCEEW at the lon/lat
+    FPI_pt = (
+        FPI_DCCEEW
+        .sel(x=float(lon), y=float(lat), method='nearest')
+        .to_dataframe()
+        .reset_index()
+        .rename(columns={'data':'forestProdIx'})
+    )
+    FPI_pt[['x', 'y']] = float(lon), float(lat)
+    # Merge FullCAM and DCCEEW FPI data, then append to main dataframe
+    FPI_merged = pd.merge(
+        FullCAM_siteinfo,
+        FPI_pt,
+        on=['year', 'x', 'y'],
+        suffixes=('_FullCAM', '_DCCEEW')
+    )
+    data_compare = pd.concat([data_compare, FPI_merged], ignore_index=True)
+    
+
+
+# Plot comparison
+p9.options.figure_size = (6, 6)
+p9.options.dpi = 150
 
 fig = (
-    p9.ggplot()
-    + p9.aes(x=plot_data[::100]['RESTful'], y=plot_data[::100]['FPI_SoilLandscape'])
+    p9.ggplot(data_compare.sample(2000))
+    + p9.aes(x='forestProdIx_FullCAM', y='forestProdIx_DCCEEW')
     + p9.geom_point(alpha=0.3, size=0.5)
     + p9.geom_abline(slope=1, intercept=0, linetype='dashed', color='red')
     + p9.theme_bw()
     + p9.labs(
         title='Forest Productivity Index Comparison',
         x='FPI FullCAM',
-        y='FPI Downloaded'
+        y='FPI DCCEEW'
     )
 )
+
+fig.save('data/processed/Compare_API_and_Assemble_Data_Simulations/Data_compare_SiteInfo_FPI.svg', dpi=150)

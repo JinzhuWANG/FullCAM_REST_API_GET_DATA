@@ -1,13 +1,18 @@
 
+import os
+import re
+import pandas as pd
 import rioxarray as rio
 import xarray as xr
-import rioxarray as rxr
 import numpy as np
 import plotnine as p9
 
+from glob import glob
+from tqdm.auto import tqdm
+
 from pathlib import Path
-from affine import Affine
-from tools.cache_manager import get_existing_downloads
+from tools.XML2Data import parse_soil_data
+from tools.helpers.cache_manager import get_existing_downloads
 
 
 # Config
@@ -68,37 +73,53 @@ soil_00_30.rio.to_raster(
 
 
 # ---------------------------- Plot comparison -------------------------------------
-clay_FULLCAM_arr = clay_FULLCAM_ds.sel(x=res_coords_x, y=res_coords_y, method='nearest').compute()
 
-soil_00_30 = (
-    rxr.open_rasterio('data/Soil_landscape_AUS/ClayContent/clayFrac_00_30cm.tif')
-    .sel(band=1, drop=True)
-    .compute()
-    .sel(x=res_coords_x, y=res_coords_y, method='nearest')
-)
+# Load SoilClay from Landscape Grid of Australia (SLGA)
+soilClay_SLGA = rio.open_rasterio('data/Soil_landscape_AUS/ClayContent/clayFrac_00_30cm.tif').sel(band=1, drop=True).compute()
 
-plt_data = (
-    xr.concat([clay_FULLCAM_arr, soil_00_30], dim='source').assign_coords(source=['FullCAM', 'Downloaded'])
-    .to_dataframe()
-    .reset_index()
-    .dropna()
-    .round({'x':3, 'y':3})
-    .pivot(index=['x', 'y'], columns='source', values='data')
-    .reset_index()
-    .dropna()
-)
+# Get downloaded carbon data CSV files; does not matter which species because SiteInfo is the same for all species
+FullCAM_retrive_dir ='data/processed/Compare_API_and_Assemble_Data_Simulations/download_csv'
+csv_files = [i for i in glob(f'{FullCAM_retrive_dir}/*.csv') if f'specId_8_specCat_Block' in i]
+
+data_compare = pd.DataFrame()
+for f in tqdm(csv_files):
+    # Get Cache data
+    #   The SiteInfo data for the FullCAM carbon df at lon/lat already downloaded
+    lon, lat  = re.findall(r'df_(-?\d+\.\d+)_(-?\d+\.\d+)_specId_', os.path.basename(f))[0]
+    with open(f'downloaded/siteInfo_{lon}_{lat}.xml', 'r') as file:
+        FullCAM_soil = parse_soil_data(file.read())['clayFrac'].data.item()
+    # Get SoilClay from SLGA at the lon/lat
+    soilClay_pt = (
+        soilClay_SLGA
+        .sel(x=float(lon), y=float(lat), method='nearest')
+        .data
+        .item()
+    )
+    # Merge FullCAM and SLGA SoilClay data, then append to main dataframe
+    soilClay_merged = pd.DataFrame({
+        'soilClay_FullCAM': [FullCAM_soil],
+        'soilClay_SLGA': [soilClay_pt],
+        'x': [float(lon)],
+        'y': [float(lat)],
+    })
+    data_compare = pd.concat([data_compare, soilClay_merged], ignore_index=True)
+    
+
+# Plot comparison
+p9.options.figure_size = (6, 6)
+p9.options.dpi = 150
 
 fig = (
-    p9.ggplot(plt_data[::10])
-    + p9.aes(x='FullCAM', y='Downloaded')
+    p9.ggplot(data_compare)
+    + p9.aes(x='soilClay_FullCAM', y='soilClay_SLGA')
     + p9.geom_point(alpha=0.3, size=0.5)
-    + p9.geom_abline(slope=1, intercept=0, color='red', linetype='dashed')
-    + p9.labs(
-        title='Soil Clay Fraction (0-30cm) Comparison',
-        x='FullCAM Clay-Fraction',
-        y='Jinzhu calculated Clay-Fraction'
-    )
+    + p9.geom_abline(slope=1, intercept=0, linetype='dashed', color='red')
     + p9.theme_bw()
+    + p9.labs(
+        title='Soil Clay Fraction Comparison (0-30cm)',
+        x='Soil Clay Fraction FullCAM',
+        y='Soil Clay Fraction SLGA'
+    )
 )
 
-
+fig.save('data/processed/Compare_API_and_Assemble_Data_Simulations/Data_compare_SiteInfo_soilClay.svg', dpi=150)
