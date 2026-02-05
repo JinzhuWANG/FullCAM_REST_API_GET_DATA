@@ -27,7 +27,7 @@ headers = {"Ocp-Apim-Subscription-Key": API_KEY}
 # Define download parameters
 RES_factor = 1              # Resolution factor; 1 = 1km, 2 = 2km, etc.
 SPECIES_ID = 23             # Refer to `get_plot_simulation` docstring for species ID mapping
-SPECIES_CAT = 'BlockES'       # Refer individual species in the web API to see specific category; such as 'Block' or 'Belt'
+SPECIES_CAT = 'BeltHW'       # Refer individual species in the web API to see specific category; such as 'Block' or 'Belt'
 
 # Get resfactored coords for downloading
 scrap_coords = get_downloading_coords(resfactor=RES_factor, include_region='LUTO')
@@ -51,7 +51,8 @@ to_request_coords = list(zip(scrap_coords.loc[mask_coords, 'x'], scrap_coords.lo
 #              Run FullCAM with REST API                  #
 ###########################################################
 
-# Get cached data
+# Get cached data; tankes ~10 mins to load and use ~100 GB of RAM; 
+#   using the below test snippet if just run FullCAM for a single point.
 siteInfo_fill = xr.load_dataset("data/data_assembled/siteinfo_cache.nc", chunks={})
 species_fill = xr.load_dataset(f"data/Species_TYF_R/specId_{SPECIES_ID}_match_LUTO.nc", chunks={})
 
@@ -73,8 +74,8 @@ for _ in tqdm(Parallel(n_jobs=32, return_as='generator_unordered', backend='thre
 lon = 147.5
 lat = -37.5
 
-specId = 8
-specCat = 'Block' 
+specId = 7
+specCat = 'BlockES' 
 
 try_number:int=5
 timeout:int=60
@@ -90,5 +91,6 @@ data_site = None
 data_species = None
 
 
-
+# Run FullCAM
+get_plot_simulation(data_source, lon, lat, data_site, data_species, specId, specCat, url, headers, try_number, timeout)
 
