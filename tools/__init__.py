@@ -59,7 +59,7 @@ def get_downloading_coords(resfactor:int=10, include_region:str='ALL') -> pd.Dat
 
     # Get all lon/lat for Australia; the raster used is taken from the template of LUTO
     if include_region == 'ALL':
-        Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True).compute() >= -1 # >=1 means the continental Australia
+        Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True).compute() >= -1 # >=-1 means the continental Australia
     elif include_region == 'LUTO':
         Aus_xr = rio.open_rasterio("data/lumap.tif").sel(band=1, drop=True).compute() >= 0  # >=0 means only include inside LUTO study area
     else:
