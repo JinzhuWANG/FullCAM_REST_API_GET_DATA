@@ -27,10 +27,10 @@ headers = {"Ocp-Apim-Subscription-Key": API_KEY}
 # Define download parameters
 RES_factor = 1              # Resolution factor; 1 = 1km, 2 = 2km, etc.
 SPECIES_ID = 23             # Refer to `get_plot_simulation` docstring for species ID mapping
-SPECIES_CAT = 'BeltHW'       # Refer individual species in the web API to see specific category; such as 'Block' or 'Belt'
+SPECIES_CAT = 'BlockES'       # Refer individual species in the web API to see specific category; such as 'Block' or 'Belt'
 
 # Get resfactored coords for downloading
-scrap_coords = get_downloading_coords(resfactor=RES_factor, include_region='LUTO')
+scrap_coords = get_downloading_coords(resfactor=RES_factor, include_region='ALL')
 RES_factor_coords = scrap_coords.set_index(['x', 'y']).index.tolist()
 
 
@@ -63,7 +63,7 @@ tasks = [
     for lon, lat in to_request_coords
 ]
 
-for _ in tqdm(Parallel(n_jobs=32, return_as='generator_unordered', backend='threading')(tasks), total=len(tasks)):
+for _ in tqdm(Parallel(n_jobs=64, return_as='generator_unordered', backend='threading')(tasks), total=len(tasks)):
     pass
 
 
