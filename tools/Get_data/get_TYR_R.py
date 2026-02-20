@@ -148,7 +148,7 @@ for var in species_ds.data_vars:
     tyf_arrays = []
     for TYF_Type in ds['TYF_Type'].values:
         subset = ds.sel(TYF_Type=TYF_Type)
-        arr = subset.rio.reproject_match(spatial_template, nodata=np.nan, resampling=Resampling.bilinear).compute()
+        arr = subset.rio.reproject_match(spatial_template, nodata=np.nan, resampling=Resampling.cubic_spline).compute()
         arr = fill_nan_nearest(arr) * spatial_template
         tyf_arrays.append(arr)
 
