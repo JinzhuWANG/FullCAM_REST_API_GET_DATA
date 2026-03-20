@@ -136,7 +136,7 @@ get_plot_simulation('Cache', lon, lat, data_site, data_species, specId=8, specCa
 | Task | Command/Code |
 |------|-------------|
 | Generate PLO file | `assemble_plo_sections('Cache', lon, lat, data_site, data_species, specId, specCat)` |
-| Run simulation | `get_plot_simulation('Cache', lon, lat, data_site, data_species, specId, specCat, url, headers)` |
+| Run simulation | `get_plot_simulation('Cache', lon, lat, data_site, data_species, specId, specCat, url=url, headers=headers)` |
 | Convert to NetCDF | `python FullCAM2NC.py` |
 | Load cache | `get_existing_downloads(specId=8, specCat='Block')` |
 | Rebuild cache | `rebuild_cache(specId=8, specCat='Block')` |
@@ -165,7 +165,7 @@ get_plot_simulation('Cache', lon, lat, data_site, data_species, specId=8, specCa
 ### API Utilities
 - `get_siteinfo(lat, lon, sim_start_year, consensus_count)` - Download siteInfo with consensus mechanism
 - `get_species(lon, lat, specId, consensus_count)` - Download species data
-- `get_plot_simulation(data_source, lon, lat, data_site, data_species, specId, specCat, url, headers)` - Run simulation via API
+- `get_plot_simulation(data_source, lon, lat, data_site, data_species, specId, specCat, year_start, year_end, url, headers)` - Run simulation via API
 - `get_downloading_coords(resfactor)` - Get grid coordinates from LUTO raster
 
 ## Key Functions in tools/XML2Data.py

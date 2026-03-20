@@ -168,7 +168,7 @@ with open("my_plot.plo", "w", encoding="utf-8") as f:
 # Or run simulation directly via REST API
 url = "https://api.climatechange.gov.au/climate/carbon-accounting/2024/plot/v1/2024/fullcam-simulator/run-plotsimulation"
 headers = {"Ocp-Apim-Subscription-Key": os.getenv("FULLCAM_API_KEY")}
-get_plot_simulation('Cache', lon, lat, data_site, data_species, SPECIES_ID, SPECIES_CAT, url, headers)
+get_plot_simulation('Cache', lon, lat, data_site, data_species, SPECIES_ID, SPECIES_CAT, url=url, headers=headers)
 # Results saved to: downloaded/df_{lon}_{lat}_specId_{SPECIES_ID}_specCat_{SPECIES_CAT}.csv
 ```
 
@@ -281,7 +281,7 @@ to_request_coords = list(zip(scrap_coords.loc[mask_coords, 'x'], scrap_coords.lo
 # Run simulations in parallel (32 threads)
 tasks = [
     delayed(get_plot_simulation)('Cache', lon, lat, siteInfo_fill, species_fill,
-                                  SPECIES_ID, SPECIES_CAT, url, headers)
+                                  SPECIES_ID, SPECIES_CAT, url=url, headers=headers)
     for lon, lat in to_request_coords
 ]
 
@@ -432,8 +432,8 @@ TYF (Tree Yield Formula) parameters control species growth calibration:
 
 | Function | Description |
 |----------|-------------|
-| `assemble_plo_sections(data_source, lon, lat, data_site, data_species, specId, specCat, year_start)` | Generate complete PLO file |
-| `get_plot_simulation(data_source, lon, lat, data_site, data_species, specId, specCat, url, headers)` | Run simulation via API |
+| `assemble_plo_sections(data_source, lon, lat, data_site, data_species, specId, specCat, year_start, year_end)` | Generate complete PLO file |
+| `get_plot_simulation(data_source, lon, lat, data_site, data_species, specId, specCat, year_start, year_end, url, headers)` | Run simulation via API |
 | `get_siteinfo(lat, lon, sim_start_year, try_number, consensus_count)` | Download siteInfo with consensus |
 | `get_species(lon, lat, specId, try_number, consensus_count)` | Download species data with consensus |
 | `get_downloading_coords(resfactor, include_region)` | Get grid coordinates from LUTO raster |
@@ -482,7 +482,7 @@ TYF (Tree Yield Formula) parameters control species growth calibration:
 | Task | Code/Command |
 |------|--------------|
 | Generate PLO file | `assemble_plo_sections('Cache', lon, lat, data_site, data_species, specId, specCat)` |
-| Run simulation | `get_plot_simulation('Cache', lon, lat, data_site, data_species, specId, specCat, url, headers)` |
+| Run simulation | `get_plot_simulation('Cache', lon, lat, data_site, data_species, specId, specCat, url=url, headers=headers)` |
 | Convert to NetCDF | `python FullCAM2NC.py` |
 | Load cache | `get_existing_downloads(specId=8, specCat='Block')` |
 | Rebuild cache | `rebuild_cache()` |

@@ -55,7 +55,7 @@ assemble_plo_sections()
 - `get_siteinfo(lat, lon)` - Download siteInfo with consensus mechanism
 - `get_species(lat, lon)` - Download species data
 - `get_downloading_coords(resfactor)` - Get grid coordinates from LUTO raster
-- `get_plot_simulation(lon, lat, url, headers)` - Run simulation via API
+- `get_plot_simulation(data_source, lon, lat, data_site, data_species, specId, specCat, year_start, year_end, url, headers)` - Run simulation via API
 
 **Output:** Complete PLO XML string ready for simulation
 

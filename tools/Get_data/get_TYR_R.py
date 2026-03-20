@@ -1,5 +1,6 @@
 
 import re
+import os
 import numpy as np
 import rioxarray as rio
 import pandas as pd
@@ -41,7 +42,7 @@ def fill_nan_nearest(data_2d:xr.DataArray) -> np.ndarray:
 
 # ----------------------------- Prepare data for downloading -------------------------------------
 RES_factor = 3             # Resolution factor; 1 = 1km, 2 = 2km, etc.
-SPECIES_ID = 8             # Refer to `get_plot_simulation` docstring for species ID mapping
+SPECIES_ID = 8             # Refer to `tools\parameter.py`  for species ID mapping
 SPECIES_CAT = 'Belt'       # Refer individual species in the web API to see specific category; such as 'Block' or 'Belt'
 
 # Get resfactored coords for downloading

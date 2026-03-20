@@ -320,23 +320,26 @@ def get_species(
 
 
 def get_plot_simulation(
-    data_source:str, 
-    lon:float, 
-    lat:float, 
-    data_site:xr.Dataset, 
+    data_source:str,
+    lon:float,
+    lat:float,
+    data_site:xr.Dataset,
     data_species:xr.Dataset,
     specId:int,
     specCat:str,
-    url:str,
-    headers:dict,  
-    try_number:int=5, 
-    timeout:int=60, 
+    year_start:int=2010,
+    year_end:int=2100,
+    data_yr0TS:int=1970,
+    url:str=None,
+    headers:dict=None,
+    try_number:int=5,
+    timeout:int=60,
     download_records:str='downloaded/successful_downloads.txt',
     download_csv_dir:str='downloaded'
 ):
     '''
     Run FullCAM plot simulation via REST API for given lon/lat and species ID.
-    
+
     Parameters
     ----------
     data_source : str
@@ -352,6 +355,13 @@ def get_plot_simulation(
         Available species IDs can be found in the `SPECIES_MAP` dictionary.
     specCat : str
         Planting event type. Such as 'Block' or 'Belt' planting.
+    year_start : int
+        The starting year for the simulation (default is 2010).
+    year_end : int
+        The ending year for the simulation (default is 2100).
+    data_yr0TS : int
+        Starting year of input climate/FPI datasets (default is 1970).
+        Controls yr0TS on avgAirTemp, openPanEvap, forestProdIx, and rainfall TimeSeries.
     url : str
         FullCAM REST API simulation endpoint URL.
     headers : dict
@@ -364,7 +374,7 @@ def get_plot_simulation(
         Path to the cache file for recording successful downloads.
     download_csv_dir : str
         Directory to save downloaded CSV files. Default is 'downloaded'.
-        
+
     Returns
     -------
         None if successful, else (lon, lat), "Failed" on failure.
@@ -374,7 +384,7 @@ def get_plot_simulation(
     # Re-attempt assembly after redownloading
     for attempt in range(try_number):
         try:
-            plo_str = assemble_plo_sections(data_source, lon, lat, data_site, data_species, specId, specCat)
+            plo_str = assemble_plo_sections(data_source, lon, lat, data_site, data_species, specId, specCat, year_start=year_start, year_end=year_end, data_yr0TS=data_yr0TS)
 
             response = requests.post(
                 url, 
@@ -655,7 +665,8 @@ def create_site_section(
     data_source: str = "API",
     lon: float = None,
     lat: float = None,
-    data_site: xr.DataArray = None
+    data_site: xr.DataArray = None,
+    data_yr0TS: int = 1970
 ) -> str:
     """
     Create Site section for PLO file with site parameters and time series.
@@ -668,12 +679,14 @@ def create_site_section(
     lon (float): Longitude of the site.
     lat (float): Latitude of the site.
     data_site (xr.DataArray): Optional xarray DataArray for site data when using "Cache" mode.
-    
+    data_yr0TS (int): Starting year of input climate/FPI datasets (default 1970).
+        Controls the yr0TS attribute on avgAirTemp, openPanEvap, forestProdIx, and rainfall TimeSeries.
+
     Returns
     -------
     str
         XML string for complete Site section including all TimeSeries.
-    
+
     """
     
     if data_source == "API":        # API Data Mode: Load from downloaded files
@@ -690,22 +703,30 @@ def create_site_section(
     # Parse data holder XML 
     holder_root = etree.parse('data/dataholder_site.xml').getroot()
     
-    # Extract time series and populate   
+    # Extract time series and populate
+    def _set_monthly_ts(name, values):
+        el = holder_root.xpath(f'.//*[@tInTS="{name}"]')[0]
+        el.xpath('rawTS')[0].text = ','.join(map(str, values))
+        el.xpath('rawTS')[0].set('count', str(len(values)))
+        el.set('nYrsTS', str(len(values) // 12))
+
+    def _set_annual_ts(name, values):
+        el = holder_root.xpath(f'.//*[@tInTS="{name}"]')[0]
+        el.xpath('rawTS')[0].text = ','.join(map(str, values))
+        el.xpath('rawTS')[0].set('count', str(len(values)))
+        el.set('nYrsTS', str(len(values)))
+
     avgAirTemp_values = parsed_data['avgAirTemp'].values.flatten()
-    holder_root.xpath(f'.//*[@tInTS="avgAirTemp"]/rawTS')[0].text = ','.join(map(str, avgAirTemp_values))
-    holder_root.xpath(f'.//*[@tInTS="avgAirTemp"]/rawTS')[0].set('count', str(len(avgAirTemp_values)))
-    
+    _set_monthly_ts('avgAirTemp', avgAirTemp_values)
+
     openPanEvap_values = parsed_data['openPanEvap'].values.flatten()
-    holder_root.xpath(f'.//*[@tInTS="openPanEvap"]/rawTS')[0].text = ','.join(map(str, openPanEvap_values))
-    holder_root.xpath(f'.//*[@tInTS="openPanEvap"]/rawTS')[0].set('count', str(len(openPanEvap_values)))
-    
+    _set_monthly_ts('openPanEvap', openPanEvap_values)
+
     rainfall_values = parsed_data['rainfall'].values.flatten()
-    holder_root.xpath(f'.//*[@tInTS="rainfall"]/rawTS')[0].text = ','.join(map(str, rainfall_values))
-    holder_root.xpath(f'.//*[@tInTS="rainfall"]/rawTS')[0].set('count', str(len(rainfall_values)))
-    
+    _set_monthly_ts('rainfall', rainfall_values)
+
     forestProdIx_values = [i for i in parsed_data['forestProdIx'].values.flatten() if not np.isnan(i)]
-    holder_root.xpath(f'.//*[@tInTS="forestProdIx"]/rawTS')[0].text = ','.join(map(str, forestProdIx_values))
-    holder_root.xpath(f'.//*[@tInTS="forestProdIx"]/rawTS')[0].set('count', str(len(forestProdIx_values)))
+    _set_annual_ts('forestProdIx', forestProdIx_values)
     
     
     # Get count
@@ -718,6 +739,12 @@ def create_site_section(
     maxAbgMF = parsed_data['maxAbgMF'].item()
     holder_root.set('fpiAvgLT', str(fpiAvgLT))
     holder_root.set('maxAbgMF', str(maxAbgMF))
+
+    # Update yr0TS for climate/FPI data timeseries
+    for ts_name in ('avgAirTemp', 'openPanEvap', 'forestProdIx', 'rainfall'):
+        elements = holder_root.xpath(f'.//*[@tInTS="{ts_name}"]')
+        if elements:
+            elements[0].set('yr0TS', str(data_yr0TS))
 
     return etree.tostring(holder_root).decode()
 
@@ -1037,14 +1064,16 @@ def create_other_info_section() -> str:
 
 
 def assemble_plo_sections(
-    data_source:str='Cache', 
-    lon:float=None, 
-    lat:float=None, 
+    data_source:str='Cache',
+    lon:float=None,
+    lat:float=None,
     data_site:xr.Dataset=None,
     data_species:xr.Dataset=None,
-    specId:int=None, 
+    specId:int=None,
     specCat:str=None,
-    year_start=2010, 
+    year_start:int=2010,
+    year_end:int=2100,
+    data_yr0TS:int=1970,
 ) -> str:
     """Assemble all sections of a PLO file for given lon/lat.
 
@@ -1066,11 +1095,16 @@ def assemble_plo_sections(
         Planting event type. Such as 'Block' or 'Belt' planting.
     year_start : int, optional
         The starting year for the simulation (default is 2010).
-    
+    year_end : int, optional
+        The ending year for the simulation (default is 2100).
+    data_yr0TS : int, optional
+        Starting year of input climate/FPI datasets (default is 1970).
+        Controls yr0TS on avgAirTemp, openPanEvap, forestProdIx, and rainfall TimeSeries.
+
     Returns
     -------
-    dict
-        A dictionary containing all sections of the PLO file as XML strings.
+    str
+        A complete PLO file as an XML string.
     """
     
     if data_source not in ('API', 'Cache'):
@@ -1099,9 +1133,9 @@ def assemble_plo_sections(
             f'<DocumentPlot FileType="FullCAM Plot " Version="5009" pageIxDO="10" tDiagram="-1">'
                 f'{create_meta_section("My_Plot", notesME="")}\n'
                 f'{create_config_section()}\n'
-                f'{create_timing_section()}\n'
+                f'{create_timing_section(stYrYTZ=str(year_start), enYrYTZ=str(year_end))}\n'
                 f'{create_build_section(lon, lat)}\n'
-                f'{create_site_section(data_source, lon, lat, data_site)}\n'
+                f'{create_site_section(data_source, lon, lat, data_site, data_yr0TS)}\n'
                 f'{create_species_section(data_source, lon, lat, data_species, specId)}\n'
                 f'{create_soil_section(data_source, lon, lat, data_site, year_start)}\n'
                 f'{create_init_section(data_source, lon, lat, data_site, year_start, specId)}\n'

@@ -16,7 +16,8 @@
       "Bash(powershell -Command \"vssadmin list shadows /for=N:\")",
       "Bash(powershell:*)",
       "Bash(wc:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Read(//f/Users/jinzhu/Downloads/**)"
     ],
     "deny": [],
     "ask": []
