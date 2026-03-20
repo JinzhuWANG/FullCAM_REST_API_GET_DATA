@@ -91,24 +91,25 @@ def run_species_comparison(spec_id, spec_cat):
     if not Path(cache_path).exists():
         print(f"  Cache not found: {cache_path} — skipping.")
         return
-    ds_cache = (
-        xr.open_dataset(cache_path, chunks={})['data']
-        .sel(YEAR=compare_year, drop=True)
-        .compute()
-    )
+    
+    # Soil: gap relative to first year (use concat to avoid in-place assignment on dask arrays)
+    ds_cache = xr.open_dataset(cache_path, chunks={})['data']
+    soil_gap = (
+        ds_cache.sel(VARIABLE='SOIL_C_HA', drop=True)
+        - ds_cache.sel(VARIABLE='SOIL_C_HA', drop=True).isel(YEAR=0, drop=True)
+    ).expand_dims({'VARIABLE': ['SOIL_C_HA']})
+    other_vars = [v for v in ds_cache.VARIABLE.values if v != 'SOIL_C_HA']
+    ds_cache = xr.concat([ds_cache.sel(VARIABLE=other_vars), soil_gap], dim='VARIABLE')
+    ds_cache = ds_cache.sel(YEAR=compare_year).compute()
 
     # ── Load v2020 layers ─────────────────────────────────────────────
-    if not all(p.exists() for p in [v2020_debris_layer, v2020_tree_layer, v2020_soil_layer]):
-        print(f"  v2020 layer(s) missing for {v2020_name}_{v2020_cat} — skipping.")
-        return
-
     Debries_C = rxr.open_rasterio(v2020_debris_layer, masked=True, chunks={})
     Trees_C   = rxr.open_rasterio(v2020_tree_layer,   masked=True, chunks={})
     Soil_C    = rxr.open_rasterio(v2020_soil_layer,   masked=True, chunks={})
 
     Debries_C_sel = Debries_C.sel(band=91, drop=True).compute()  # band 91 = year 2100
     Trees_C_sel   = Trees_C.sel(band=91, drop=True).compute()
-    Soil_C_sel    = Soil_C.sel(band=91, drop=True).compute()
+    Soil_C_sel    = (Soil_C.sel(band=91, drop=True) - Soil_C.isel(band=0, drop=True)).compute()
 
     ds_v2020 = xr.DataArray(
         data=np.stack([Debries_C_sel.data, Trees_C_sel.data, Soil_C_sel.data], axis=0),
@@ -133,6 +134,8 @@ def run_species_comparison(spec_id, spec_cat):
             'C mass of debris  (tC/ha)': 'DEBRIS_C_HA',
             'C mass of soil  (tC/ha)':   'SOIL_C_HA',
         })
+        # Soil gap: subtract first-year value so it matches the cache/v2020 convention
+        df_api['SOIL_C_HA'] = df_api['SOIL_C_HA'] - df_api['SOIL_C_HA'].iloc[0]
         df_api = df_api.query(f'Year == {compare_year}').melt(
             id_vars=['Year'], var_name='VARIABLE', value_name='data_api'
         )
@@ -224,6 +227,9 @@ def run_species_comparison(spec_id, spec_cat):
     # ── Spatial CO2 maps: v2020 | v2024 | Difference (fig6) ──────────
     fig6, axes = plt.subplots(3, 3, figsize=(18, 13), constrained_layout=True)
 
+    VMAX_ABS  = 1200   # fixed colour scale for v2020 and v2024 columns
+    VMAX_DIFF =  600   # fixed symmetric scale for the difference column
+
     for row_idx, (var, comp_label) in enumerate(MAP_COMPONENTS):
         da_v2020_co2 = ds_v2020[:, ::5, ::5].sel(VARIABLE=var) * CO2_FACTOR
         da_v2024_co2 = ds_cache[::5, ::5, :].sel(VARIABLE=var) * CO2_FACTOR
@@ -231,14 +237,8 @@ def run_species_comparison(spec_id, spec_cat):
         da_diff_co2 = da_v2020_co2 * np.nan
         da_diff_co2.values = da_v2024_co2.values - da_v2020_co2.values
 
-        all_vals = np.concatenate([
-            da_v2020_co2.values[np.isfinite(da_v2020_co2.values)],
-            da_v2024_co2.values[np.isfinite(da_v2024_co2.values)],
-        ])
-        vmax = float(np.nanpercentile(all_vals, 95))
-
         ax = axes[row_idx, 0]
-        da_v2020_co2.plot(ax=ax, cmap='YlOrRd', vmin=0, vmax=vmax,
+        da_v2020_co2.plot(ax=ax, cmap='YlOrRd', vmin=0, vmax=VMAX_ABS,
                           add_labels=False, cbar_kwargs={'label': 'tCO2/ha', 'shrink': 0.8})
         if row_idx == 0:
             ax.set_title('v2020', fontsize=12, fontweight='bold')
@@ -246,7 +246,7 @@ def run_species_comparison(spec_id, spec_cat):
         ax.set_xlabel('')
 
         ax = axes[row_idx, 1]
-        da_v2024_co2.plot(ax=ax, cmap='YlOrRd', vmin=0, vmax=vmax,
+        da_v2024_co2.plot(ax=ax, cmap='YlOrRd', vmin=0, vmax=VMAX_ABS,
                           add_labels=False, cbar_kwargs={'label': 'tCO2/ha', 'shrink': 0.8})
         if row_idx == 0:
             ax.set_title('v2024', fontsize=12, fontweight='bold')
@@ -254,9 +254,7 @@ def run_species_comparison(spec_id, spec_cat):
         ax.set_xlabel('')
 
         ax = axes[row_idx, 2]
-        diff_vals    = da_diff_co2.values[np.isfinite(da_diff_co2.values)]
-        diff_abs_max = float(np.nanpercentile(np.abs(diff_vals), 95))
-        norm = TwoSlopeNorm(vmin=-diff_abs_max, vcenter=0, vmax=diff_abs_max)
+        norm = TwoSlopeNorm(vmin=-VMAX_DIFF, vcenter=0, vmax=VMAX_DIFF)
         da_diff_co2.plot(ax=ax, cmap='RdBu_r', norm=norm,
                          add_labels=False, cbar_kwargs={'label': 'Δ tCO2/ha', 'shrink': 0.8})
         if row_idx == 0:
