@@ -71,7 +71,7 @@ The toolkit currently supports the following species with their corresponding pl
 ├── downloaded/                                         # API cache (excluded from git)
 │   ├── siteInfo_{lon}_{lat}.xml                        # Climate/soil/FPI data per location
 │   ├── species_{lon}_{lat}_specId_{id}.xml             # Species parameters per location
-│   ├── df_{lon}_{lat}_specId_{id}_specCat_{cat}.csv    # Simulation results
+│   ├── df_{lon}_{lat}_specId_{id}_specCat_{cat}_ssp_{ssp}_InData_{yr_range}.csv    # Simulation results
 │   └── successful_downloads.txt                        # Cache index (fast startup)
 └── tools/                                              # Libraries and utilities
     ├── __init__.py                                     # Core PLO functions + API utilities
@@ -169,7 +169,7 @@ with open("my_plot.plo", "w", encoding="utf-8") as f:
 url = "https://api.climatechange.gov.au/climate/carbon-accounting/2024/plot/v1/2024/fullcam-simulator/run-plotsimulation"
 headers = {"Ocp-Apim-Subscription-Key": os.getenv("FULLCAM_API_KEY")}
 get_plot_simulation('Cache', lon, lat, data_site, data_species, SPECIES_ID, SPECIES_CAT, url=url, headers=headers)
-# Results saved to: downloaded/df_{lon}_{lat}_specId_{SPECIES_ID}_specCat_{SPECIES_CAT}.csv
+# Results saved to: downloaded/df_{lon}_{lat}_specId_{SPECIES_ID}_specCat_{SPECIES_CAT}_ssp_{ssp}_InData_{data_year_range}.csv
 ```
 
 ## Configuration Reference

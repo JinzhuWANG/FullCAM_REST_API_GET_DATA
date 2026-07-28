@@ -17,7 +17,7 @@ from io import StringIO
 from threading import Lock
 from collections import Counter
 from tools.XML2Data import parse_site_data, parse_init_data, parse_soil_data, parse_species_data
-from tools.parameter import SPECIES_MAP
+from tools.parameter import SPECIES_MAP, carbon_csv_name
 
 
 # Configuration
@@ -327,8 +327,10 @@ def get_plot_simulation(
     data_species:xr.Dataset,
     specId:int,
     specCat:str,
-    year_start:int=2010,
-    year_end:int=2100,
+    ssp:str,
+    data_year_range:str,
+    sim_year_start:int=2010,
+    sim_year_end:int=2100,
     data_yr0TS:int=1970,
     url:str=None,
     headers:dict=None,
@@ -355,10 +357,16 @@ def get_plot_simulation(
         Available species IDs can be found in the `SPECIES_MAP` dictionary.
     specCat : str
         Planting event type. Such as 'Block' or 'Belt' planting.
-    year_start : int
-        The starting year for the simulation (default is 2010).
-    year_end : int
-        The ending year for the simulation (default is 2100).
+    ssp : str
+        Climate scenario driving the run; one of `SSPS`, e.g. 'historical'. Only tags the
+        output CSV name; the scenario data itself comes in via `data_site`.
+    data_year_range : str
+        Year span of the input climate data, e.g. '1970_2023' or '2021_2040'. Only tags
+        the output CSV name.
+    sim_year_start : int
+        The starting year for the simulation (default is 2010). Also tags the output CSV name.
+    sim_year_end : int
+        The ending year for the simulation (default is 2100). Also tags the output CSV name.
     data_yr0TS : int
         Starting year of input climate/FPI datasets (default is 1970).
         Controls yr0TS on avgAirTemp, openPanEvap, forestProdIx, and rainfall TimeSeries.
@@ -384,7 +392,7 @@ def get_plot_simulation(
     # Re-attempt assembly after redownloading
     for attempt in range(try_number):
         try:
-            plo_str = assemble_plo_sections(data_source, lon, lat, data_site, data_species, specId, specCat, year_start=year_start, year_end=year_end, data_yr0TS=data_yr0TS)
+            plo_str = assemble_plo_sections(data_source, lon, lat, data_site, data_species, specId, specCat, sim_year_start=sim_year_start, sim_year_end=sim_year_end, data_yr0TS=data_yr0TS)
 
             response = requests.post(
                 url, 
@@ -394,7 +402,7 @@ def get_plot_simulation(
             )
 
             if response.status_code == 200:
-                f_name = f'df_{lon}_{lat}_specId_{specId}_specCat_{specCat}.csv'
+                f_name = carbon_csv_name(lon, lat, specId, specCat, ssp, data_year_range, sim_year_start, sim_year_end)
                 response_df = pd.read_csv(StringIO(response.text))
                 response_df.to_csv(f'{download_csv_dir}/{f_name}', index=False)
                 
@@ -1071,8 +1079,8 @@ def assemble_plo_sections(
     data_species:xr.Dataset=None,
     specId:int=None,
     specCat:str=None,
-    year_start:int=2010,
-    year_end:int=2100,
+    sim_year_start:int=2010,
+    sim_year_end:int=2100,
     data_yr0TS:int=1970,
 ) -> str:
     """Assemble all sections of a PLO file for given lon/lat.
@@ -1093,9 +1101,9 @@ def assemble_plo_sections(
         Species ID to load (default is 8 for Eucalyptus globulus).
     specCat : str, optional
         Planting event type. Such as 'Block' or 'Belt' planting.
-    year_start : int, optional
+    sim_year_start : int, optional
         The starting year for the simulation (default is 2010).
-    year_end : int, optional
+    sim_year_end : int, optional
         The ending year for the simulation (default is 2100).
     data_yr0TS : int, optional
         Starting year of input climate/FPI datasets (default is 1970).
@@ -1133,12 +1141,12 @@ def assemble_plo_sections(
             f'<DocumentPlot FileType="FullCAM Plot " Version="5009" pageIxDO="10" tDiagram="-1">'
                 f'{create_meta_section("My_Plot", notesME="")}\n'
                 f'{create_config_section()}\n'
-                f'{create_timing_section(stYrYTZ=str(year_start), enYrYTZ=str(year_end))}\n'
+                f'{create_timing_section(stYrYTZ=str(sim_year_start), enYrYTZ=str(sim_year_end))}\n'
                 f'{create_build_section(lon, lat)}\n'
                 f'{create_site_section(data_source, lon, lat, data_site, data_yr0TS)}\n'
                 f'{create_species_section(data_source, lon, lat, data_species, specId)}\n'
-                f'{create_soil_section(data_source, lon, lat, data_site, year_start)}\n'
-                f'{create_init_section(data_source, lon, lat, data_site, year_start, specId)}\n'
+                f'{create_soil_section(data_source, lon, lat, data_site, sim_year_start)}\n'
+                f'{create_init_section(data_source, lon, lat, data_site, sim_year_start, specId)}\n'
                 f'{create_event_section(specId, specCat)}\n'
                 f'{create_outwinset_section()}\n'
                 f'{create_logentryset_section()}\n'

@@ -16,9 +16,22 @@ from joblib import Parallel, delayed
 
 
 
+# df_{lon}_{lat}_specId_{id}_specCat_{cat}_ssp_{ssp}_InData_{yyyy_yyyy}_SIM_YR_{yyyy}_{yyyy}.csv
+#   Historical runs use ssp='historical'. specCat is matched as letters only so it cannot
+#   greedily swallow the scenario part that follows it.
+DF_PATTERN = (
+    r'df_(-?\d+\.\d+)_(-?\d+\.\d+)_specId_(\d+)_specCat_([A-Za-z]+)'
+    r'_ssp_([A-Za-z0-9]+)_InData_(\d{4}_\d{4})_SIM_YR_(\d{4})_(\d{4})\.csv'
+)
+
+
 def get_existing_downloads(
     specId: int,
     specCat: str,
+    ssp: str,
+    data_year_range: str,
+    sim_year_start: int,
+    sim_year_end: int,
     cache_file: str = 'downloaded/successful_downloads.txt',
     downloaded_dir: str = 'downloaded'
 ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]], List[Tuple[float, float]]]:
@@ -35,6 +48,12 @@ def get_existing_downloads(
         Species ID to filter species and df files.
     specCat : str
         Species category ('Block' or 'Belt') to filter df files.
+    ssp : str
+        Climate scenario to filter df files; one of `SSPS`, e.g. 'historical' or 'SSP245'.
+    data_year_range : str
+        Year span of the input climate data to filter df files, e.g. '1970_2023'.
+    sim_year_start, sim_year_end : int
+        Simulation period to filter df files, e.g. 2050 and 2150.
     cache_file : str, optional
         Path to cache file (default: 'downloaded/successful_downloads.txt')
     downloaded_dir : str, optional
@@ -47,12 +66,13 @@ def get_existing_downloads(
     existing_species : List[Tuple[float, float]]
         List of (lon, lat) tuples for existing species files (filtered by specId)
     existing_dfs : List[Tuple[float, float]]
-        List of (lon, lat) tuples for existing simulation dataframe files (filtered by specId and specCat)
+        List of (lon, lat) tuples for existing simulation dataframe files
+        (filtered by specId, specCat, scenario and simulation period)
 
     """
     # Try to load from cache first
     if os.path.exists(cache_file):
-        return load_cache(specId, specCat, cache_file)
+        return load_cache(specId, specCat, ssp, data_year_range, sim_year_start, sim_year_end, cache_file)
 
     # Cache doesn't exist - rebuild it (rebuilds ALL records)
     print(f"Cache file not found: {cache_file}"
@@ -60,13 +80,17 @@ def get_existing_downloads(
     rebuild_cache(downloaded_dir, cache_file)
 
     # Now load from the rebuilt cache with filtering
-    return load_cache(specId, specCat, cache_file)
+    return load_cache(specId, specCat, ssp, data_year_range, sim_year_start, sim_year_end, cache_file)
 
 
 
 def load_cache(
     specId: int,
     specCat: str,
+    ssp: str,
+    data_year_range: str,
+    sim_year_start: int,
+    sim_year_end: int,
     cache_file: str = 'downloaded/successful_downloads.txt'
 ) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]], List[Tuple[float, float]]]:
     """
@@ -78,6 +102,12 @@ def load_cache(
         Species ID to filter species and df files.
     specCat : str
         Species category ('Block' or 'Belt') to filter df files.
+    ssp : str
+        Climate scenario to filter df files; one of `SSPS`, e.g. 'historical' or 'SSP245'.
+    data_year_range : str
+        Year span of the input climate data to filter df files, e.g. '1970_2023'.
+    sim_year_start, sim_year_end : int
+        Simulation period to filter df files, e.g. 2050 and 2150.
     cache_file : str, optional
         Path to cache file (default: 'downloaded/successful_downloads.txt')
 
@@ -88,11 +118,12 @@ def load_cache(
     existing_species : List[Tuple[float, float]]
         List of (lon, lat) tuples for existing species files (filtered by specId)
     existing_dfs : List[Tuple[float, float]]
-        List of (lon, lat) tuples for existing simulation dataframe files (filtered by specId and specCat)
+        List of (lon, lat) tuples for existing simulation dataframe files
+        (filtered by specId, specCat, scenario and simulation period)
     """
     lon_lat_reg_xml = re.compile(r'siteInfo_(-?\d+\.\d+)_(-?\d+\.\d+)\.xml')
     lon_lat_reg_species = re.compile(r'species_(-?\d+\.\d+)_(-?\d+\.\d+)_specId_(\d+)\.xml')
-    lon_lat_reg_csv = re.compile(r'df_(-?\d+\.\d+)_(-?\d+\.\d+)_specId_(\d+)_specCat_(\w+)\.csv')
+    lon_lat_reg_csv = re.compile(DF_PATTERN)
 
     existing_siteinfo = []
     existing_species = []
@@ -103,7 +134,8 @@ def load_cache(
         return existing_siteinfo, existing_species, existing_dfs
 
     print(f"Loading cache from {cache_file}...")
-    print(f"Filtering for specId={specId}, specCat={specCat}")
+    print(f"Filtering for specId={specId}, specCat={specCat}, ssp={ssp}, "
+          f"data_year_range={data_year_range}, sim years={sim_year_start}-{sim_year_end}")
 
     with open(cache_file, 'r', encoding='utf-8') as f:
         for line in f:
@@ -123,8 +155,14 @@ def load_cache(
             elif line.startswith('df_'):
                 match = lon_lat_reg_csv.match(line)
                 if match:
-                    lon, lat, file_specId, file_specCat = match.groups()
-                    if int(file_specId) == specId and file_specCat == specCat:
+                    (lon, lat, file_specId, file_specCat, file_ssp,
+                     file_data_year_range, file_sim_year_start, file_sim_year_end) = match.groups()
+                    if (int(file_specId) == specId
+                            and file_specCat == specCat
+                            and file_ssp == ssp
+                            and file_data_year_range == data_year_range
+                            and int(file_sim_year_start) == sim_year_start
+                            and int(file_sim_year_end) == sim_year_end):
                         existing_dfs.append((float(lon), float(lat)))
 
     print(f"Loaded {len(existing_siteinfo):,} siteInfo, {len(existing_species):,} species, and {len(existing_dfs):,} df entries from cache")
@@ -145,7 +183,7 @@ def rebuild_cache(
     Scans for all file types:
     - siteInfo_*.xml - Site information files
     - species_*.xml - Species parameter files (all specIds)
-    - df_*.csv - Simulation result files (all specIds and specCats)
+    - df_*.csv - Simulation result files (all specIds, specCats and climate scenarios)
 
     Parameters
     ----------
@@ -173,7 +211,7 @@ def rebuild_cache(
     # Regex patterns to match all file types (no filtering by specId/specCat)
     lon_lat_reg_siteinfo = re.compile(r'siteInfo_(-?\d+\.\d+)_(-?\d+\.\d+)\.xml')
     lon_lat_reg_species = re.compile(r'species_(-?\d+\.\d+)_(-?\d+\.\d+)_specId_\d+\.xml')
-    lon_lat_reg_df = re.compile(r'df_(-?\d+\.\d+)_(-?\d+\.\d+)_specId_\d+_specCat_\w+\.csv')
+    lon_lat_reg_df = re.compile(DF_PATTERN)
 
     siteinfo_files = []
     species_files = []

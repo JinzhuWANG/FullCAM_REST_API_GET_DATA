@@ -6,6 +6,8 @@ import numpy as np
 
 from lxml import etree
 
+from tools.parameter import carbon_csv_name
+
 
 # Helper function to convert attribute value to float
 def convert_to_float(val):
@@ -261,25 +263,53 @@ def get_species_data(lon: float, lat: float, specId: int = 8) -> xr.DataArray:
 
 
 
-def get_carbon_data(lon:float, lat:float, specId:int, specCat:str) -> xr.DataArray:
+def get_carbon_data(
+    lon:float,
+    lat:float,
+    specId:int,
+    specCat:str,
+    ssp:str,
+    data_year_range:str,
+    sim_year_start:int,
+    sim_year_end:int
+) -> xr.DataArray:
     '''
     Get carbon stock data from CSV file and return as xarray DataArray.
+
+    Parameters
+    ----------
+    lon, lat : float
+        Coordinates of the site.
+    specId : int
+        Species ID; see `SPECIES_MAP`.
+    specCat : str
+        Planting category; see `SPECIES_GEOMETRY`.
+    ssp : str
+        Climate scenario the run was driven by; one of `SSPS`, e.g. 'historical'.
+    data_year_range : str
+        Year span of the input climate data, e.g. '1970_2023' or '2021_2040'.
+    sim_year_start, sim_year_end : int
+        Simulation period the run covered; identifies the CSV and bounds the years extracted.
+
+    Returns
+    -------
+        DataArray (y, x, YEAR, VARIABLE), or None if the CSV does not exist.
     '''
 
     # Check if file exists
-    filepath = f'downloaded/df_{lon}_{lat}_specId_{specId}_specCat_{specCat}.csv'
+    filepath = f'downloaded/{carbon_csv_name(lon, lat, specId, specCat, ssp, data_year_range, sim_year_start, sim_year_end)}'
     if not os.path.exists(filepath):
         return None
 
     # Read and filter directly - stay in wide format
     variables = ['DEBRIS_C_HA', 'SOIL_C_HA', 'TREE_C_HA']
-    years = np.arange(2010, 2101)
+    years = np.arange(sim_year_start, sim_year_end + 1)
 
     df = pd.read_csv(
         filepath,
         usecols=['Year', 'C mass of plants  (tC/ha)', 'C mass of debris  (tC/ha)', 'C mass of soil  (tC/ha)']
     )
-    df = df[df['Year'] >= 2010].rename(columns={
+    df = df[df['Year'] >= sim_year_start].rename(columns={
         'Year': 'YEAR',
         'C mass of plants  (tC/ha)': 'TREE_C_HA',
         'C mass of debris  (tC/ha)': 'DEBRIS_C_HA',

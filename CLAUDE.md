@@ -109,7 +109,7 @@ get_plot_simulation('Cache', lon, lat, data_site, data_species, specId=8, specCa
 ├── downloaded/                          # API cache (excluded from git)
 │   ├── siteInfo_{lon}_{lat}.xml         # Climate/soil/FPI data
 │   ├── species_{lon}_{lat}_specId_{id}.xml  # Species parameters
-│   ├── df_{lon}_{lat}_specId_{id}_specCat_{cat}.csv  # Simulation results
+│   ├── df_{lon}_{lat}_specId_{id}_specCat_{cat}_ssp_{ssp}_InData_{yr_range}.csv  # Simulation results
 │   └── successful_downloads.txt         # Cache index
 └── tools/                               # Libraries and utilities
     ├── __init__.py                      # Core PLO functions + API utilities (1100+ lines)
