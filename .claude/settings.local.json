@@ -17,7 +17,9 @@
       "Bash(powershell:*)",
       "Bash(wc:*)",
       "Bash(cat:*)",
-      "Read(//f/Users/jinzhu/Downloads/**)"
+      "Read(//f/Users/jinzhu/Downloads/**)",
+      "Bash(printf '*\\\\n!.gitignore\\\\n')",
+      "Bash(\"n:\\\\Data-Master\\\\FullCAM\\\\FullCAM_REST_API_GET_DATA_2025\\\\downloaded\\\\.gitignore\")"
     ],
     "deny": [],
     "ask": []

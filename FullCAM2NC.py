@@ -65,8 +65,8 @@ def save_carbon_to_geotiff(specId, specCat):
             return (lon, lat, carbon_template)
         
     tasks = [delayed(_fetch_carbon_with_coords)(lon, lat) for lon, lat in carbon_coords]
-    for lon, lat, data in tqdm(Parallel(n_jobs=-1, return_as='generator_unordered')(tasks), total=len(tasks)):
-        carbon_full.loc[dict(y=lat, x=lon)] = data.squeeze(['y', 'x'], drop=True)
+    for lon, lat, data in tqdm(Parallel(n_jobs=-1, return_as='generator_unordered', backend='threading')(tasks), total=len(tasks)):
+        carbon_full.loc[dict(y=lat, x=lon)] = data.squeeze(['y', 'x'], drop=True).astype(np.float32)
 
 
     # Save to NetCDF
@@ -99,83 +99,83 @@ for specId, specCats in SPECIES_GEOMETRY.items():
 
 
 
-# ---------------------- Get SiteInfo data ------------------------
-siteInfo_coords = set(existing_siteinfo).intersection(set(RES_coords))
+# # ---------------------- Get SiteInfo data ------------------------
+# siteInfo_coords = set(existing_siteinfo).intersection(set(RES_coords))
 
-sample_lon, sample_lat  = next(iter(siteInfo_coords))
-sample_template = get_siteinfo_data(sample_lon, sample_lat) * np.nan
-siteInfo_full = sample_template.squeeze(['y', 'x'], drop=True).expand_dims(y=all_lats, x=all_lons) * np.nan
-siteInfo_full = siteInfo_full.astype(np.float32)
+# sample_lon, sample_lat  = next(iter(siteInfo_coords))
+# sample_template = get_siteinfo_data(sample_lon, sample_lat) * np.nan
+# siteInfo_full = sample_template.squeeze(['y', 'x'], drop=True).expand_dims(y=all_lats, x=all_lons) * np.nan
+# siteInfo_full = siteInfo_full.astype(np.float32)
 
 
-# Parallel fetch data
-def fetch_with_coords(lon, lat):
-    try:
-        data = get_siteinfo_data(lon, lat)
-        return (lon, lat, data)
-    except Exception as e:
-        return (lon, lat, sample_template)
+# # Parallel fetch data
+# def fetch_with_coords(lon, lat):
+#     try:
+#         data = get_siteinfo_data(lon, lat)
+#         return (lon, lat, data)
+#     except Exception as e:
+#         return (lon, lat, sample_template)
     
-tasks = [delayed(fetch_with_coords)(lon, lat) for lon, lat in siteInfo_coords]
-for lon, lat, data in tqdm(Parallel(n_jobs=16, return_as='generator_unordered')(tasks), total=len(tasks)):
-    siteInfo_full.loc[dict(y=lat, x=lon)] = data.squeeze(['y', 'x'], drop=True)
+# tasks = [delayed(fetch_with_coords)(lon, lat) for lon, lat in siteInfo_coords]
+# for lon, lat, data in tqdm(Parallel(n_jobs=16, return_as='generator_unordered')(tasks), total=len(tasks)):
+#     siteInfo_full.loc[dict(y=lat, x=lon)] = data.squeeze(['y', 'x'], drop=True).astype(np.float32)
        
 
-# Save to NetCDF
-siteInfo_full.rio.write_crs("EPSG:4283", inplace=True)
-siteInfo_full.rio.write_transform(trans, inplace=True)
-siteInfo_full.to_netcdf('data/processed/siteinfo_RES.nc', encoding={var: {'zlib': True, 'complevel': 5} for var in siteInfo_full.data_vars})
+# # Save to NetCDF
+# siteInfo_full.rio.write_crs("EPSG:4283", inplace=True)
+# siteInfo_full.rio.write_transform(trans, inplace=True)
+# siteInfo_full.to_netcdf('data/processed/siteinfo_RES.nc', encoding={var: {'zlib': True, 'complevel': 5} for var in siteInfo_full.data_vars})
 
-# Save to GeoTIFFs
-for var, xarry in siteInfo_full.data_vars.items():
-    if len(xarry.dims) > 2:
-        to_stack_dims = [dim for dim in xarry.dims if dim not in ['y', 'x']]
-        xarry = xarry.stack(band=to_stack_dims).astype(np.float32)
-    export_to_geotiff_with_band_names(xarry, f'data/processed/siteInfo_{var}_RES_multiband.tif')
+# # Save to GeoTIFFs
+# for var, xarry in siteInfo_full.data_vars.items():
+#     if len(xarry.dims) > 2:
+#         to_stack_dims = [dim for dim in xarry.dims if dim not in ['y', 'x']]
+#         xarry = xarry.stack(band=to_stack_dims).astype(np.float32)
+#     export_to_geotiff_with_band_names(xarry, f'data/processed/siteInfo_{var}_RES_multiband.tif')
     
 
 
 
-# ---------------------- Get species data ------------------------
-species_coords = set(existing_species).intersection(set(RES_coords))
+# # ---------------------- Get species data ------------------------
+# species_coords = set(existing_species).intersection(set(RES_coords))
 
-sample_lon, sample_lat  = next(iter(species_coords))
-species_template = get_species_data(sample_lon, sample_lat)  # Warm up cache
-species_full = species_template.squeeze(['y', 'x'], drop=True).expand_dims(y=all_lats, x=all_lons) * np.nan
+# sample_lon, sample_lat  = next(iter(species_coords))
+# species_template = get_species_data(sample_lon, sample_lat)  # Warm up cache
+# species_full = species_template.squeeze(['y', 'x'], drop=True).expand_dims(y=all_lats, x=all_lons) * np.nan
 
 
-# Parallel fetch data
-def fetch_species_with_coords(lon, lat):
-    try:
-        data = get_species_data(lon, lat)
-        return (lon, lat, data)
-    except Exception as e:
-        print(f"Error fetching species data for ({lon}, {lat}): {e}")
-        return (lon, lat, species_template)
+# # Parallel fetch data
+# def fetch_species_with_coords(lon, lat):
+#     try:
+#         data = get_species_data(lon, lat)
+#         return (lon, lat, data)
+#     except Exception as e:
+#         print(f"Error fetching species data for ({lon}, {lat}): {e}")
+#         return (lon, lat, species_template)
     
-tasks = [delayed(fetch_species_with_coords)(lon, lat) for lon, lat in species_coords]
-for lon, lat, data in tqdm(Parallel(n_jobs=32, return_as='generator_unordered')(tasks), total=len(tasks)):
-    species_full.loc[dict(y=lat, x=lon)] = data.squeeze(['y', 'x'], drop=True)
+# tasks = [delayed(fetch_species_with_coords)(lon, lat) for lon, lat in species_coords]
+# for lon, lat, data in tqdm(Parallel(n_jobs=32, return_as='generator_unordered')(tasks), total=len(tasks)):
+#     species_full.loc[dict(y=lat, x=lon)] = data.squeeze(['y', 'x'], drop=True).astype(np.float32)
     
     
-# Save to NetCDF
-species_full.rio.write_crs("EPSG:4283", inplace=True)
-species_full.rio.write_transform(trans, inplace=True)
-species_full.to_netcdf(
-    'data/processed/species_RES.nc', 
-    encoding={var: {'zlib': True, 'complevel': 5} for var in species_full.data_vars}
-)
+# # Save to NetCDF
+# species_full.rio.write_crs("EPSG:4283", inplace=True)
+# species_full.rio.write_transform(trans, inplace=True)
+# species_full.to_netcdf(
+#     'data/processed/species_RES.nc', 
+#     encoding={var: {'zlib': True, 'complevel': 5} for var in species_full.data_vars}
+# )
 
 
-# Save to GeoTIFFs
-for var in species_full.data_vars:
-    xarry = species_full[var]
-    for TYF_Type in xarry['TYF_Type'].values:
-        export_to_geotiff_with_band_names(
-            xarry.sel(TYF_Type=TYF_Type, drop=True), 
-            f'data/processed/species_{var}_{TYF_Type}_RES_{RES_factor}_multiband.tif',
-            band_dim='YEAR'
-        )
+# # Save to GeoTIFFs
+# for var in species_full.data_vars:
+#     xarry = species_full[var]
+#     for TYF_Type in xarry['TYF_Type'].values:
+#         export_to_geotiff_with_band_names(
+#             xarry.sel(TYF_Type=TYF_Type, drop=True), 
+#             f'data/processed/species_{var}_{TYF_Type}_RES_{RES_factor}_multiband.tif',
+#             band_dim='YEAR'
+#         )
 
 
 

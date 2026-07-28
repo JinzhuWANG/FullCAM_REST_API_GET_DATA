@@ -290,7 +290,7 @@ def get_carbon_data(lon:float, lat:float, specId:int, specCat:str) -> xr.DataArr
         df.values.astype(np.float32)[np.newaxis, np.newaxis, :, :],
         coords={'y': [lat], 'x': [lon], 'YEAR': years, 'VARIABLE': variables},
         dims=['y', 'x', 'YEAR', 'VARIABLE']
-    )
+    ).astype(np.float32)
 
     return df_xr
 

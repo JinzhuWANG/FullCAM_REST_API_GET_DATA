@@ -68,6 +68,55 @@ for _ in tqdm(Parallel(n_jobs=64, return_as='generator_unordered', backend='thre
 
 
 
+# ---------- Assemble using Zohreh's future datasets ----------
+data_site = xr.open_dataset("data/data_assembled/siteinfo_cache.nc")
+data_soil = data_site[[
+    'clayFrac', 
+    'rpmaCMInitF', 
+    'humsCMInitF',
+    'inrtCMInitF',
+    'TSMDInitF'
+]]
+
+data_zohr_temp = xr.open_dataarray(
+    r"data\Zohreh_data\avgAirTemp_SSP245_2020_2040.nc", 
+    chunks={}
+).assign_coords(x=data_soil['x'].values, y=data_soil['y'].values)
+
+data_zohr_fpi = xr.open_dataarray(
+    r"data\Zohreh_data\forestProdIx_SSP245_2020-2040.nc", 
+    chunks={}
+).assign_coords(x=data_soil['x'].values, y=data_soil['y'].values)
+
+data_zohr_rain = xr.open_dataarray(
+    r"data\Zohreh_data\rainFall_SSP245_2020_2040.nc", 
+    chunks={}
+).assign_coords(x=data_soil['x'].values, y=data_soil['y'].values)
+
+data_zohr_opan = xr.open_dataarray(
+    r"data\Zohreh_data\openPanEvap_SSP245_2020_2040.nc", 
+    chunks={}
+).rename({'band': 'month', 'lat': 'y', 'lon': 'x'}).assign_coords(x=data_soil['x'].values, y=data_soil['y'].values)
+
+data_zohr_mf = xr.open_dataarray(
+    r"data\Zohreh_data\maxAbgMF_SSP245.nc", 
+    chunks={}
+).assign_coords(x=data_soil['x'].values, y=data_soil['y'].values)
+
+data_zohr_comb = xr.Dataset({
+    'avgAirTemp': data_zohr_temp,
+    'forestProdIx': data_zohr_fpi,
+    'fpiAvgLT': data_zohr_fpi,
+    'rainfall': data_zohr_rain,
+    'openPanEvap': data_zohr_opan,
+    'maxAbgMF': data_zohr_mf,
+    'clayFrac': data_soil['clayFrac'],
+    'rpmaCMInitF': data_soil['rpmaCMInitF'],
+    'humsCMInitF': data_soil['humsCMInitF'],
+    'inrtCMInitF': data_soil['inrtCMInitF'],
+    'TSMDInitF': data_soil['TSMDInitF']
+}).compute()
+
 
 # ---------- Testing ----------
 
@@ -76,14 +125,18 @@ lat = -37.5
 
 specId = 7
 specCat = 'BlockES' 
-data_yr0TS = 2010
+data_yr0TS = 2035
+
+year_start = 2035
+year_end = year_start + 100
 
 try_number:int=5
 timeout:int=60
 
 # Test Cache data retrieval
 data_source = "Cache"
-data_site = xr.open_dataset("data/data_assembled/siteinfo_cache.nc", chunks={})
+data_site = data_zohr_comb
+data_site = xr.open_dataset(f"data/data_assembled/siteinfo_cache.nc", chunks={}).sel(year=2020)
 data_species = xr.open_dataset(f"data/Species_TYF_R/specId_{specId}_match_LUTO.nc", chunks={})
 
 # # Test API data retrieval
@@ -93,6 +146,5 @@ data_species = xr.open_dataset(f"data/Species_TYF_R/specId_{specId}_match_LUTO.n
 
 
 # Run FullCAM
-data_site = data_site.sel(year=2022, drop=True)
 get_plot_simulation(data_source, lon, lat, data_site, data_species, specId, specCat, url=url, headers=headers, try_number=try_number, timeout=timeout)
 
