@@ -36,20 +36,26 @@ RES_df = get_downloading_coords(resfactor=RES_FACTOR)
 RES_coords = RES_df.set_index(['x', 'y']).index.tolist()
 
 
-# Get the transform
-all_lats = np.arange(max(RES_df['y']), min(RES_df['y']) - 0.001, -RES_FACTOR * 0.01).astype(np.float32)
-all_lons = np.arange(min(RES_df['x']), max(RES_df['x']) + 0.001, RES_FACTOR * 0.01).astype(np.float32)
-cell_size_x = abs(all_lons[1] - all_lons[0])
-cell_size_y = abs(all_lats[1] - all_lats[0])
-
-# Get affine transform
+# Build the output grid straight off the LUTO template. `get_downloading_coords` samples
+#   lumap with `isel(::RES_FACTOR)`, so the RES cells are lumap cells 0, RES_FACTOR,
+#   2*RES_FACTOR, ... and carry lumap's own centre coordinates. Taking the coords and the
+#   transform from the same source keeps them aligned for any RES_FACTOR, whereas rebuilding
+#   them from the min/max of the (land-masked) RES coords drifts with the factor.
 lumap_xr = rio.open_rasterio('data/lumap.tif', masked=True)
-trans = list(lumap_xr.rio.transform())
-trans[2] = min(all_lons) + (cell_size_x / 2)
-trans[5] = max(all_lats) - (cell_size_y / 2)
-trans[0] = trans[0] * RES_FACTOR
-trans[4] = trans[4] * RES_FACTOR
-trans = Affine(*trans)
+lumap_trans = lumap_xr.rio.transform()
+
+# Rounded to 4 dp then cast, to match the coords `get_downloading_coords` returns
+all_lats = lumap_xr['y'].values[::RES_FACTOR].round(4).astype(np.float32)
+all_lons = lumap_xr['x'].values[::RES_FACTOR].round(4).astype(np.float32)
+
+# A RES pixel is centred on the lumap cell it was sampled from, so the grid origin sits half
+#   a RES pixel out from that first centre, i.e. half a lumap cell in from the lumap origin.
+cell_size_x = lumap_trans.a * RES_FACTOR
+cell_size_y = lumap_trans.e * RES_FACTOR    # negative, north-up
+trans = Affine(
+    cell_size_x, lumap_trans.b, lumap_trans.c + (lumap_trans.a - cell_size_x) / 2,
+    lumap_trans.d, cell_size_y, lumap_trans.f + (lumap_trans.e - cell_size_y) / 2,
+)
 
 
 
